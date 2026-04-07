@@ -93,7 +93,7 @@ SIMILARITY_THRESHOLD = 0.50
 
 def _normalize(text: str) -> list[str]:
     """텍스트 → 토큰 목록. 한국어 조사·어미 제거 후 유니크 토큰."""
-    tokens = _re.findall(r'[\d]+[%억만달러원]?|[가-힣]{2,}|[A-Za-z]{2,}', text)
+    tokens = _re.findall(r'[\d]+(?:\.[\d]+)?[%억만달러원]?|[가-힣]{2,}|[A-Za-z]{2,}', text)
 
     # 한국어 조사·어미 suffix 제거 (형태소 분석기 없이 규칙 기반)
     KO_SUFFIXES = ("에서", "에게", "에서의", "으로", "로서", "로부터", "에서도",
@@ -171,7 +171,7 @@ def _core_keywords(text: str) -> set[str]:
     단, 공통적으로 많이 나오는 지명(이란, 러시아 등 단독)은
     키워드 겹침 판단에서 제외 — 너무 광범위하게 묶이는 것 방지.
     """
-    nums = set(_re.findall(r'\d+[%대척건명]?', text))
+    nums = set(_re.findall(r'\d+(?:\.\d+)?[%대척건명]?', text))
     names = set()
     for t in _canonical_tokens(text):
         if t in _KO_EN_MAP.values():
@@ -191,8 +191,8 @@ def _keyword_overlap(a: str, b: str) -> float:
     kb = _core_keywords(b)
 
     # 수치만 추출
-    nums_a = set(_re.findall(r'\d+[%대척건명]?', a))
-    nums_b = set(_re.findall(r'\d+[%대척건명]?', b))
+    nums_a = set(_re.findall(r'\d+(?:\.\d+)?[%대척건명]?', a))
+    nums_b = set(_re.findall(r'\d+(?:\.\d+)?[%대척건명]?', b))
 
     # 수치 공통이 없으면 키워드 겹침 판정 안 함
     if not (nums_a & nums_b):
@@ -342,20 +342,11 @@ def _update_cache(cache: dict, events: list[dict]):
             "sent_at": datetime.now().isoformat(),
         }
         # 캐시 내 유사 항목 찾아서 severity 업데이트 (중복 저장 방지)
-        merged = False
-        for existing in sent_list:
-            j = _jaccard_similarity(event.get("event",""), existing.get("event",""))
-            k = _keyword_overlap(event.get("event",""), existing.get("event",""))
-            e = _entity_overlap(event.get("event",""), existing.get("event",""))
-            is_same = (j >= SIMILARITY_THRESHOLD or k >= 0.70
-                       or (e >= 1.0 and j >= 0.10) or (e >= 0.60 and j >= 0.15))
-            if is_same:
-                # severity 높은 쪽으로 갱신
-                if new_entry["severity"] > existing["severity"]:
-                    existing.update(new_entry)
-                merged = True
-                break
-        if not merged:
+        existing = _find_similar(event, sent_list)
+        if existing is not None:
+            if new_entry["severity"] > existing["severity"]:
+                existing.update(new_entry)
+        else:
             sent_list.append(new_entry)
 
 
