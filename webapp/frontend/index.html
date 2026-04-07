@@ -3,41 +3,175 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kaven Dashboard (Scaffold)</title>
+  <title>Kaven Dashboard</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 24px; }
+    .row { margin-bottom: 10px; }
+    label { margin-right: 12px; }
+    input, select { margin-right: 8px; }
     button { margin-right: 8px; }
     pre { background: #111; color: #0f0; padding: 12px; border-radius: 8px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+    th { background: #f4f4f4; }
+    .pill { padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #eee; }
   </style>
 </head>
 <body>
-  <h1>Kaven Dashboard (Scaffold)</h1>
-  <p>백엔드 API를 호출해 최신 실행 결과를 확인합니다.</p>
+  <h1>Kaven Dashboard</h1>
 
-  <button id="healthBtn">Health</button>
-  <button id="latestBtn">Latest Run</button>
-  <button id="runOnceBtn">Run Once</button>
+  <div class="row">
+    <button id="runOnceBtn">Run Once</button>
+    <button id="refreshBtn">Refresh</button>
+    <span id="status" class="pill">idle</span>
+  </div>
 
+  <div class="row">
+    <label>Min Severity
+      <select id="severityMin">
+        <option value="">All</option>
+        <option value="1">1+</option>
+        <option value="2">2+</option>
+        <option value="3">3+</option>
+        <option value="4">4+</option>
+        <option value="5">5</option>
+      </select>
+    </label>
+
+    <label>Category
+      <select id="category">
+        <option value="">All</option>
+        <option value="energy">energy</option>
+        <option value="semiconductor">semiconductor</option>
+        <option value="currency">currency</option>
+        <option value="conflict">conflict</option>
+        <option value="other">other</option>
+      </select>
+    </label>
+
+    <label>Keyword
+      <input id="query" type="text" placeholder="이벤트 키워드" />
+    </label>
+  </div>
+
+  <div class="row">
+    <label><input id="autoPolling" type="checkbox" checked /> Auto Polling (10s)</label>
+    <label><input id="useSse" type="checkbox" checked /> SSE 실시간 업데이트</label>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>run_id</th>
+        <th>started_at</th>
+        <th>severity</th>
+        <th>category</th>
+        <th>event</th>
+      </tr>
+    </thead>
+    <tbody id="eventsBody"></tbody>
+  </table>
+
+  <h3>Latest payload</h3>
   <pre id="output">Ready</pre>
 
   <script>
     const api = 'http://127.0.0.1:8000';
     const out = document.getElementById('output');
+    const eventsBody = document.getElementById('eventsBody');
+    const status = document.getElementById('status');
 
-    async function call(path, method = 'GET') {
-      out.textContent = `Calling ${method} ${path}...`;
-      try {
-        const res = await fetch(`${api}${path}`, { method });
-        const data = await res.json();
-        out.textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        out.textContent = String(e);
+    let pollTimer = null;
+    let sse = null;
+
+    function currentFilters() {
+      const severityMin = document.getElementById('severityMin').value;
+      const category = document.getElementById('category').value;
+      const q = document.getElementById('query').value.trim();
+      const params = new URLSearchParams({ limit: '20' });
+      if (severityMin) params.set('severity_min', severityMin);
+      if (category) params.set('category', category);
+      if (q) params.set('q', q);
+      return params;
+    }
+
+    function setStatus(text) {
+      status.textContent = text;
+    }
+
+    function renderRuns(data) {
+      const runs = data.runs || [];
+      const rows = [];
+      for (const run of runs) {
+        for (const event of (run.events || [])) {
+          rows.push(`
+            <tr>
+              <td>${run.run_id || ''}</td>
+              <td>${run.started_at || ''}</td>
+              <td>${event.severity ?? ''}</td>
+              <td>${event.category || ''}</td>
+              <td>${event.event || ''}</td>
+            </tr>
+          `);
+        }
+      }
+      eventsBody.innerHTML = rows.join('');
+      out.textContent = JSON.stringify(data, null, 2);
+      setStatus(`runs=${runs.length}`);
+    }
+
+    async function fetchRuns() {
+      const qs = currentFilters().toString();
+      const res = await fetch(`${api}/runs?${qs}`);
+      const data = await res.json();
+      renderRuns(data);
+    }
+
+    async function runOnce() {
+      setStatus('running...');
+      const res = await fetch(`${api}/runs/once`, { method: 'POST' });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+      await fetchRuns();
+    }
+
+    function setupPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      if (document.getElementById('autoPolling').checked) {
+        pollTimer = setInterval(fetchRuns, 10000);
       }
     }
 
-    document.getElementById('healthBtn').onclick = () => call('/health');
-    document.getElementById('latestBtn').onclick = () => call('/runs/latest');
-    document.getElementById('runOnceBtn').onclick = () => call('/runs/once', 'POST');
+    function setupSse() {
+      if (sse) {
+        sse.close();
+        sse = null;
+      }
+      if (!document.getElementById('useSse').checked) return;
+
+      sse = new EventSource(`${api}/runs/stream`);
+      sse.onmessage = (msg) => {
+        try {
+          const payload = JSON.parse(msg.data);
+          if (payload.type === 'run_update') {
+            fetchRuns();
+          }
+        } catch (_) {}
+      };
+      sse.onerror = () => setStatus('sse reconnecting...');
+    }
+
+    document.getElementById('refreshBtn').onclick = fetchRuns;
+    document.getElementById('runOnceBtn').onclick = runOnce;
+    document.getElementById('severityMin').onchange = fetchRuns;
+    document.getElementById('category').onchange = fetchRuns;
+    document.getElementById('query').onchange = fetchRuns;
+    document.getElementById('autoPolling').onchange = setupPolling;
+    document.getElementById('useSse').onchange = setupSse;
+
+    fetchRuns();
+    setupPolling();
+    setupSse();
   </script>
 </body>
 </html>
