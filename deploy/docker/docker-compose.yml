@@ -1,0 +1,11 @@
+version: '3.9'
+services:
+  kaven-web:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../../src/kaven/logs:/app/src/kaven/logs
+    restart: unless-stopped
