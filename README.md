@@ -40,7 +40,7 @@ OPENSKY_PASSWORD=
 AISSTREAM_API_KEY=
 SEARXNG_URL=http://localhost:8080
 
-# ===== 분석 엔진 (둘 중 하나 이상 권장) =====
+# ===== 분석 엔진 (하나 이상 권장) =====
 OPENAI_BASE_URL=
 OPENAI_API_KEY=
 OPENAI_MODEL=
