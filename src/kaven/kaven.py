@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-Maven Smart System — 지정학 조기경보 + 투자 신호 시스템
+Kaven Smart System — 지정학 조기경보 + 투자 신호 시스템
 
 팔란티어 Maven Smart System 스타일의 다중 데이터 소스
 실시간 수집·분석·알림 개인용 시스템.
 
 사용법:
-    python3 maven.py --once     # 1회 실행
-    python3 maven.py --watch    # 5분 간격 루프
-    python3 maven.py --test     # 테스트 알림 발송
+    python3 kaven.py --once     # 1회 실행
+    python3 kaven.py --watch    # 5분 간격 루프
 """
 
 import argparse
@@ -21,11 +20,27 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# .env 로드
-from dotenv import load_dotenv
-
 SCRIPT_DIR = Path(__file__).parent
-load_dotenv(SCRIPT_DIR / ".env")
+
+
+def _load_env_file(env_path: Path) -> None:
+    """간단한 .env 로더 (python-dotenv 의존성 제거)."""
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
+
+
+_load_env_file(SCRIPT_DIR / ".env")
 
 # 로깅 설정
 LOG_DIR = SCRIPT_DIR / "logs"
@@ -40,16 +55,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("maven")
 
-# 모듈 임포트
-from collectors import ais_collector, adsb_collector, news_collector, social_collector
-from analyzer import analyze
-from signal_generator import process_signals
-
-
 async def run_collectors() -> dict:
     """모든 수집기를 병렬 실행. 개별 실패 허용."""
+    from collectors import ais_collector, adsb_collector, news_collector, social_collector
+
     logger.info("=" * 60)
-    logger.info("Maven 데이터 수집 시작")
+    logger.info("Kaven 데이터 수집 시작")
     logger.info("=" * 60)
     
     # 모든 collector 병렬 실행
@@ -89,11 +100,13 @@ import re as _re
 
 # 유사도 임계값: 이 값 이상이면 동일 사건으로 판정 (낮출수록 보수적)
 SIMILARITY_THRESHOLD = 0.50
+NUMERIC_TOKEN_PATTERN = r"\d+(?:\.\d+)?(?:[%대척건명])?"
+TOKEN_PATTERN = rf"{NUMERIC_TOKEN_PATTERN}|[가-힣]{{2,}}|[A-Za-z]{{2,}}"
 
 
 def _normalize(text: str) -> list[str]:
     """텍스트 → 토큰 목록. 한국어 조사·어미 제거 후 유니크 토큰."""
-    tokens = _re.findall(r'[\d]+[%억만달러원]?|[가-힣]{2,}|[A-Za-z]{2,}', text)
+    tokens = _re.findall(TOKEN_PATTERN, text)
 
     # 한국어 조사·어미 suffix 제거 (형태소 분석기 없이 규칙 기반)
     KO_SUFFIXES = ("에서", "에게", "에서의", "으로", "로서", "로부터", "에서도",
@@ -171,7 +184,7 @@ def _core_keywords(text: str) -> set[str]:
     단, 공통적으로 많이 나오는 지명(이란, 러시아 등 단독)은
     키워드 겹침 판단에서 제외 — 너무 광범위하게 묶이는 것 방지.
     """
-    nums = set(_re.findall(r'\d+[%대척건명]?', text))
+    nums = set(_re.findall(NUMERIC_TOKEN_PATTERN, text))
     names = set()
     for t in _canonical_tokens(text):
         if t in _KO_EN_MAP.values():
@@ -191,8 +204,8 @@ def _keyword_overlap(a: str, b: str) -> float:
     kb = _core_keywords(b)
 
     # 수치만 추출
-    nums_a = set(_re.findall(r'\d+[%대척건명]?', a))
-    nums_b = set(_re.findall(r'\d+[%대척건명]?', b))
+    nums_a = set(_re.findall(NUMERIC_TOKEN_PATTERN, a))
+    nums_b = set(_re.findall(NUMERIC_TOKEN_PATTERN, b))
 
     # 수치 공통이 없으면 키워드 겹침 판정 안 함
     if not (nums_a & nums_b):
@@ -206,11 +219,15 @@ def _keyword_overlap(a: str, b: str) -> float:
 
 def _content_fingerprint(event: dict) -> str:
     """
-    내용 동일성 키 — severity만 기준.
-    signal·assets 변화는 갱신으로 보지 않음 (노이즈 방지).
-    severity가 실제로 올라간 경우만 갱신 발송.
+    내용 동일성 키.
+    signal·assets 변화는 갱신으로 보지 않되, severity 외에
+    핵심 수치/출처까지 반영해 다른 사건이 동일값으로 뭉개지는
+    위험을 줄인다.
     """
-    key = f"{event.get('severity', 0)}"
+    event_text = event.get("event", "")
+    numeric_tokens = sorted(_re.findall(NUMERIC_TOKEN_PATTERN, event_text))
+    source_url = event.get("source_url") or ""
+    key = f"{event.get('severity', 0)}|{source_url}|{'/'.join(numeric_tokens)}"
     return hashlib.md5(key.encode()).hexdigest()
 
 
@@ -263,14 +280,7 @@ def _find_similar(event: dict, sent_list: list[dict]) -> dict | None:
             matches.append(prev)
             continue
 
-        sim = _jaccard_similarity(event_text, prev_text)
-        kw  = _keyword_overlap(event_text, prev_text)
-        eo  = _entity_overlap(event_text, prev_text)
-
-        if (sim >= SIMILARITY_THRESHOLD
-                or kw >= 0.70
-                or (eo >= 1.0 and sim >= 0.10)
-                or (eo >= 0.60 and sim >= 0.15)):
+        if _is_same_event(event_text, prev_text):
             matches.append(prev)
 
     if not matches:
@@ -278,6 +288,19 @@ def _find_similar(event: dict, sent_list: list[dict]) -> dict | None:
 
     # 여러 매칭 중 severity 최고값 반환
     return max(matches, key=lambda x: x.get("severity", 0))
+
+
+def _is_same_event(current_text: str, previous_text: str) -> bool:
+    """두 이벤트 설명이 동일 사건인지 판정."""
+    sim = _jaccard_similarity(current_text, previous_text)
+    kw = _keyword_overlap(current_text, previous_text)
+    eo = _entity_overlap(current_text, previous_text)
+    return (
+        sim >= SIMILARITY_THRESHOLD
+        or kw >= 0.70
+        or (eo >= 1.0 and sim >= 0.10)
+        or (eo >= 0.60 and sim >= 0.15)
+    )
 
 
 def _deduplicate_events(events: list[dict], cache: dict) -> list[dict]:
@@ -344,11 +367,13 @@ def _update_cache(cache: dict, events: list[dict]):
         # 캐시 내 유사 항목 찾아서 severity 업데이트 (중복 저장 방지)
         merged = False
         for existing in sent_list:
-            j = _jaccard_similarity(event.get("event",""), existing.get("event",""))
-            k = _keyword_overlap(event.get("event",""), existing.get("event",""))
-            e = _entity_overlap(event.get("event",""), existing.get("event",""))
-            is_same = (j >= SIMILARITY_THRESHOLD or k >= 0.70
-                       or (e >= 1.0 and j >= 0.10) or (e >= 0.60 and j >= 0.15))
+            event_text = event.get("event", "")
+            existing_text = existing.get("event", "")
+            same_url = (
+                bool(new_entry["source_url"])
+                and new_entry["source_url"] == existing.get("source_url", "")
+            )
+            is_same = same_url or _is_same_event(event_text, existing_text)
             if is_same:
                 # severity 높은 쪽으로 갱신
                 if new_entry["severity"] > existing["severity"]:
@@ -361,8 +386,11 @@ def _update_cache(cache: dict, events: list[dict]):
 
 async def run_once():
     """1회 실행: 수집 → 분석 → 중복제거 → 신호 발송 → 로그 저장."""
+    from analyzer import analyze
+    from signal_generator import process_signals
+
     start = datetime.now(timezone.utc)
-    logger.info(f"Maven 실행 시작: {start.isoformat()}")
+    logger.info(f"Kaven 실행 시작: {start.isoformat()}")
     
     # 1. 데이터 수집
     collected = await run_collectors()
@@ -431,14 +459,14 @@ async def run_once():
         except Exception as e:
             logger.warning(f"Convex 저장 실패 (로컬 로그는 유지): {e}")
 
-    logger.info(f"Maven 실행 완료: {(end - start).total_seconds():.1f}초 소요")
+    logger.info(f"Kaven 실행 완료: {(end - start).total_seconds():.1f}초 소요")
     
     return log_entry
 
 
 async def run_watch(interval_minutes: int = 5):
     """감시 모드: interval 간격으로 반복 실행."""
-    logger.info(f"Maven 감시 모드 시작 (간격: {interval_minutes}분)")
+    logger.info(f"Kaven 감시 모드 시작 (간격: {interval_minutes}분)")
     
     while True:
         try:
@@ -450,53 +478,14 @@ async def run_watch(interval_minutes: int = 5):
         await asyncio.sleep(interval_minutes * 60)
 
 
-async def run_test():
-    """테스트 모드: 테스트 이벤트로 텔레그램 알림 확인."""
-    logger.info("Maven 테스트 모드")
-    
-    test_events = [
-        {
-            "event": "🧪 Maven 시스템 테스트 — 이 메시지는 조기경보 시스템 테스트입니다",
-            "severity": 3,
-            "category": "other",
-            "affected_assets": ["KOSPI"],
-            "signal": "watch",
-            "confidence": 1.0,
-            "reasoning": "시스템 테스트 메시지입니다. 실제 지정학 이벤트가 아닙니다.",
-        }
-    ]
-    
-    logger.info("테스트 이벤트 발송 중...")
-    result = await process_signals(test_events)
-    logger.info(f"테스트 결과: {result}")
-    
-    # 로그 저장
-    now = datetime.now(timezone.utc)
-    log_entry = {
-        "run_id": f"test_{now.strftime('%Y%m%d_%H%M%S')}",
-        "started_at": now.isoformat(),
-        "ended_at": now.isoformat(),
-        "mode": "test",
-        "events": test_events,
-        "signal_result": result,
-    }
-    
-    log_file = LOG_DIR / f"maven_{now.strftime('%Y%m%d')}.jsonl"
-    with open(log_file, "a", encoding="utf-8") as f:
-        f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-    
-    return result
-
-
 def main():
     parser = argparse.ArgumentParser(
-        description="Maven Smart System — 지정학 조기경보 + 투자 신호 시스템"
+        description="Kaven Smart System — 지정학 조기경보 + 투자 신호 시스템"
     )
     
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--once", action="store_true", help="1회 실행")
     group.add_argument("--watch", action="store_true", help="5분 간격 감시 모드")
-    group.add_argument("--test", action="store_true", help="테스트 알림 발송")
     
     parser.add_argument(
         "--interval", type=int, default=5,
@@ -509,8 +498,6 @@ def main():
         asyncio.run(run_once())
     elif args.watch:
         asyncio.run(run_watch(args.interval))
-    elif args.test:
-        asyncio.run(run_test())
 
 
 if __name__ == "__main__":

@@ -1,105 +1,159 @@
-# Kaven (Maven) - 지정학 조기경보 시스템
+# Kaven
 
-팔란티어 Maven Smart System 스타일의 다중 데이터 소스 실시간 수집·분석·알림 개인용 시스템.
+Kaven은 지정학 이벤트를 수집(AIS/ADS-B/뉴스/소셜)하고, 분석/중복 제거 후 텔레그램 알림으로 전달하는 조기경보 시스템입니다.
 
-## 🎯 목적
+## 1. 프로젝트 구성
 
-- **지정학 리스크 감시**: 중동, 대만 해협, 한반도 등 주요 감시 공역 모니터링
-- **실시간 데이터 수집**: AIS (선박), ADS-B (항공기), 뉴스, 소셜 미디어
-- **자동 분석**: 이벤트 상관관계 분석 및 유사도 감지
-- **투자 신호 생성**: 지정학 리스크 기반 투자 신호 생성
+- `src/kaven/kaven.py` : 메인 실행기 (`--once`, `--watch`)
+- `src/kaven/collectors/` : 데이터 수집기 (AIS/ADS-B/뉴스/소셜)
+- `src/kaven/analyzer.py` : 이벤트 분석 로직 (Gemini 우선, Anthropic 폴백)
+- `src/kaven/signal_generator.py` : 텔레그램/게이트웨이 알림 발송
+- `tests/test_kaven_dedup.py` : dedup 단위 테스트
+- `tests/test_kaven_log_replay_integration.py` : 로그 리플레이 통합 테스트
+- `webapp/backend/app.py` : FastAPI 백엔드
+- `webapp/frontend/index.html` : 대시보드(정적)
 
-## 📁 프로젝트 구조
+---
 
-```
-kaven/
-├── maven.py              # 메인 오케스트레이션 로직
-├── analyzer.py           # 이벤트 상관관계 분석 엔진
-├── signal_generator.py   # 투자 신호 생성기
-├── collectors/           # 데이터 수집기
-│   ├── ais_collector.py  # 선박 AIS 데이터 수집
-│   ├── adsb_collector.py # 항공기 ADS-B 데이터 수집
-│   ├── news_collector.py # 뉴스 피드 수집
-│   └── social_collector.py # 소셜 미디어 수집
-├── logs/                 # 수집된 데이터 로그
-└── README.md             # 이 파일
-```
+## 2. 빠른 실행
 
-## 🚀 빠른 시작
-
-### 1. 의존성 설치
+### 2.1 의존성 설치
 
 ```bash
-pip3 install aiohttp python-dotenv feedparser
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install aiohttp feedparser websockets fastapi uvicorn pytest
 ```
 
-### 2. 환경 변수 설정
+### 2.2 `.env` 파일 준비 (필수)
 
-`.env` 파일에 다음 변수를 설정하세요:
+Kaven은 실행 시 `src/kaven/.env`를 자동 로드합니다.
 
 ```bash
-# OpenSky Network 인증 (선택)
-OPENSKY_USERNAME=your_username
-OPENSKY_PASSWORD=your_password
+cat > src/kaven/.env <<'ENV'
+# ===== 데이터 수집 =====
+OPENSKY_USERNAME=
+OPENSKY_PASSWORD=
+AISSTREAM_API_KEY=
+SEARXNG_URL=http://localhost:8080
 
-# 알림 설정 (선택)
-TELEGRAM_BOT_TOKEN=your_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
+# ===== 분석 엔진 (둘 중 하나 이상 권장) =====
+GEMINI_API_KEY=
+ANTHROPIC_API_KEY=
+
+# ===== 알림 =====
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+TELEGRAM_TOPIC_MAVEN=5052
+TELEGRAM_USER_DM=
+
+# ===== 폴백 게이트웨이 (선택) =====
+OPENCLAW_GATEWAY_URL=http://localhost:18789
+ENV
 ```
 
-### 3. 실행
+> 보안 주의: `.env`에는 민감정보가 포함되므로 Git에 커밋하지 마세요.
+
+### 2.3 실행
 
 ```bash
-# 1 회 실행
-python3 maven.py --once
+# 1회 실행
+python src/kaven/kaven.py --once
 
-# 감시 모드 (5 분 간격)
-python3 maven.py --watch
+# 감시 모드 (기본 5분)
+python src/kaven/kaven.py --watch
 
-# 테스트 알림 발송
-python3 maven.py --test
+# 감시 모드 (예: 10분)
+python src/kaven/kaven.py --watch --interval 10
 ```
 
-## 🔍 주요 기능
+---
 
-### 데이터 수집기 (Collectors)
+## 3. 실사용 필수 설정 체크리스트 (중요)
 
-- **AIS Collector**: 선박 실시간 위치 데이터 수집
-- **ADS-B Collector**: 항공기 실시간 위치 데이터 수집 (군용기 감지)
-- **News Collector**: 뉴스 피드 수집 및 분석
-- **Social Collector**: 소셜 미디어 모니터링
+아래 항목 중 누락되면 **시뮬레이션/폴백 모드**로 동작하거나 일부 기능이 실패할 수 있습니다.
 
-### 분석 엔진 (Analyzer)
+### 3.1 데이터 수집
 
-- **이벤트 상관관계 분석**: 여러 소스의 데이터 간 연관성 분석
-- **유사도 감지**: 중복 이벤트 식별 및 병합
-- **지정학 리스크 평가**: 수집된 데이터 기반 리스크 점수 산출
+- `AISSTREAM_API_KEY`
+  - 미설정 시 AIS는 실데이터 대신 **시뮬레이션 데이터**를 사용합니다.
+- `OPENSKY_USERNAME` / `OPENSKY_PASSWORD`
+  - 없으면 ADS-B는 비인증 모드로 동작하며 rate limit이 더 엄격합니다.
+- `SEARXNG_URL`
+  - 기본값은 `http://localhost:8080`.
+  - SearxNG가 미구동이면 뉴스/소셜 검색이 크게 제한됩니다.
 
-### 신호 생성기 (Signal Generator)
+### 3.2 분석 엔진
 
-- **투자 신호 생성**: 지정학 리스크 기반 매수/매도 신호 생성
-- **신호 검증**: 과거 데이터 기반 신호 신뢰도 평가
-- **알림 발송**: Telegram 등을 통한 실시간 알림
+- `GEMINI_API_KEY` 또는 `ANTHROPIC_API_KEY` 중 최소 1개 권장.
+- 둘 다 없거나 호출 실패 시 규칙 기반 `_fallback_analysis`로 동작합니다.
 
-## 📊 감시 공역
+### 3.3 알림(텔레그램/OpenClaw)
 
-| 공역 | 설명 | 위도 | 경도 |
-|------|------|------|------|
-| 중동 | 이란·이라크·걸프 지역 | 24.0-38.0 | 44.0-62.0 |
-| 대만 해협 | 대만 주변 해역 | 22.0-27.0 | 117.0-122.0 |
-| 한반도 | 한반도及周边 공역 | 33.0-43.0 | 124.0-132.0 |
+- `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` 설정 시 Telegram Bot API 직접 발송.
+- `TELEGRAM_BOT_TOKEN`이 없으면 `OPENCLAW_GATEWAY_URL` 폴백 발송을 시도.
+- 긴급 DM 사용 시 `TELEGRAM_USER_DM` 필요.
+- 토픽 사용 시 `TELEGRAM_TOPIC_MAVEN` 값을 채널/포럼 토픽에 맞게 설정.
 
-## 🛠️ 기술 스택
+### 3.4 자주 발생하는 설정 실수
 
-- **언어**: Python 3.11+
-- **비동기 처리**: asyncio, aiohttp
-- **데이터 처리**: feedparser (RSS/Atom 피드)
-- **환경 관리**: python-dotenv
+- 변수명 실수: `CHAT_ID`가 아니라 **`TELEGRAM_CHAT_ID`**를 사용해야 합니다.
+- `.env` 경로 실수: 루트가 아니라 **`src/kaven/.env`**에 있어야 자동 로드됩니다.
+- 로컬 SearxNG 미구동: `localhost:8080` 연결 실패 시 뉴스/소셜 수집 로그에 경고가 발생합니다.
 
-## 📝 라이선스
+---
 
-이 프로젝트는 개인 학습 및 연구 목적으로 개발되었습니다.
+## 4. 현재 동작 모드 확인 방법
 
-## 🤝 기여
+실행 로그에서 아래 키워드를 확인하세요.
 
-이슈 및 PR 을 환영합니다!
+- `AISSTREAM_API_KEY 미설정 — 시뮬레이션 모드로 동작`
+- `OpenSky 인증 정보 미설정 — 비인증 모드`
+- `SearxNG ... 실패` / `HTTP 403` / 연결 오류
+- `모든 분석 경로 실패` (AI 키 누락/실패)
+- `No telegram delivery method available` (텔레그램 + 게이트웨이 모두 실패)
+
+---
+
+## 5. 웹 앱 포팅 스캐폴드
+
+### 5.1 백엔드 실행
+
+```bash
+uvicorn webapp.backend.app:app --reload --port 8000
+```
+
+### 5.2 프론트 실행
+
+```bash
+python -m http.server 8080 --directory webapp/frontend
+```
+
+브라우저에서 `http://127.0.0.1:8080` 접속 후 백엔드(`http://127.0.0.1:8000`)와 연동됩니다.
+
+---
+
+## 6. 테스트
+
+```bash
+# 전체 테스트
+make test
+
+# Kaven 핵심 테스트만
+make test-kaven
+```
+
+---
+
+## 7. 운영 참고
+
+- `.env` 파일 경로: `src/kaven/.env`
+- 실행 로그: `src/kaven/logs/maven_YYYYMMDD.jsonl`
+- dedup 캐시: `src/kaven/logs/sent_cache.json`
+- 대시보드 기능: 이벤트 리스트/필터/자동 폴링/SSE 실시간 업데이트
+- 추가 운영 문서:
+  - `docs/release-notes.md`
+  - `docs/webapp-checklist.md`
+  - `deploy/systemd/kaven.service`
+  - `deploy/docker/docker-compose.yml`

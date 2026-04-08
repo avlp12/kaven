@@ -1,0 +1,14 @@
+[Unit]
+Description=Kaven Watch Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/kaven
+ExecStart=/usr/bin/python3 /opt/kaven/src/kaven/kaven.py --watch --interval 5
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

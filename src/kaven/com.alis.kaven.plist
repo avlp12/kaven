@@ -3,12 +3,12 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.alis.maven</string>
+    <string>com.alis.kaven</string>
     
     <key>ProgramArguments</key>
     <array>
         <string>/Users/alis_mini/.pyenv/versions/3.11.11/bin/python3</string>
-        <string>/Users/alis_mini/.openclaw/workspace/scripts/maven/maven.py</string>
+        <string>/Users/alis_mini/.openclaw/workspace/scripts/kaven/kaven.py</string>
         <string>--once</string>
     </array>
     
@@ -16,13 +16,13 @@
     <integer>300</integer>
     
     <key>WorkingDirectory</key>
-    <string>/Users/alis_mini/.openclaw/workspace/scripts/maven</string>
+    <string>/Users/alis_mini/.openclaw/workspace/scripts/kaven</string>
     
     <key>StandardOutPath</key>
-    <string>/tmp/openclaw/maven.log</string>
+    <string>/tmp/openclaw/kaven.log</string>
     
     <key>StandardErrorPath</key>
-    <string>/tmp/openclaw/maven.log</string>
+    <string>/tmp/openclaw/kaven.log</string>
     
     <key>EnvironmentVariables</key>
     <dict>
@@ -39,18 +39,18 @@
     <false/>
     
     <!-- 설치:
-    cp com.alis.maven.plist ~/Library/LaunchAgents/
-    launchctl load ~/Library/LaunchAgents/com.alis.maven.plist
+    cp com.alis.kaven.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.alis.kaven.plist
     
     제거:
-    launchctl unload ~/Library/LaunchAgents/com.alis.maven.plist
-    rm ~/Library/LaunchAgents/com.alis.maven.plist
+    launchctl unload ~/Library/LaunchAgents/com.alis.kaven.plist
+    rm ~/Library/LaunchAgents/com.alis.kaven.plist
     
     수동 실행:
-    launchctl start com.alis.maven
+    launchctl start com.alis.kaven
     
     로그 확인:
-    tail -f /tmp/openclaw/maven.log
+    tail -f /tmp/openclaw/kaven.log
     -->
 </dict>
 </plist>
