@@ -4,6 +4,17 @@
 
 Kaven은 AIS/ADS-B/뉴스/소셜 데이터를 수집하고, LLM 분석 + dedup 후 텔레그램 알림/로그 저장까지 수행하는 지정학 조기경보 시스템입니다.
 
+현재 버전: **0.0.01**
+
+버전 정책:
+- 모든 업데이트 시 버전을 올리고(`0.0.01`부터 시작), 릴리스 노트/알림 헤더/로그 메타데이터에 동일 버전을 표시합니다.
+
+### 최근 업데이트 (v0.0.01)
+- 사용자 알림 문구의 `Maven` 표기를 `Kaven`으로 통일했습니다.
+- 실행 로그 파일명을 `kaven_YYYYMMDD.jsonl`로 전환했고, 구버전 `maven_*.jsonl`은 읽기 호환을 유지합니다.
+- 텔레그램 경보 헤더/긴급 경보에 버전(`v0.0.01`)이 표시됩니다.
+- `/health` 응답과 런타임 로그 메타데이터에 버전 필드를 포함합니다.
+
 ---
 
 ## 1) 시스템 개요
@@ -179,7 +190,7 @@ python -m http.server 8080 --directory webapp/frontend
 ## 8) 운영/트러블슈팅
 
 ### 로그/캐시
-- 실행 로그: `src/kaven/logs/maven_YYYYMMDD.jsonl`
+- 실행 로그: `src/kaven/logs/kaven_YYYYMMDD.jsonl` (구버전 `maven_*.jsonl`도 읽기 호환)
 - dedup 캐시: `src/kaven/logs/sent_cache.json`
 
 ### 자주 발생하는 문제
@@ -187,6 +198,10 @@ python -m http.server 8080 --directory webapp/frontend
 - `.env`는 루트가 아니라 `src/kaven/.env`에 있어야 자동 로드됨
 - SearxNG 미구동 시 뉴스/소셜 수집 저하
 - `Convex 저장 실패 (로컬 로그는 유지)`가 떠도 로컬 로그는 정상 저장됨
+
+### 텔레그램 FAQ
+- 텔레그램 봇 생성, `TELEGRAM_CHAT_ID`/토픽 ID 확인, DM 설정, 오류 해결은 아래 문서를 참고하세요.
+- 문서: `docs/telegram-faq.md`
 
 ---
 
@@ -230,5 +245,6 @@ pytest -q
 - `webapp/README.md`
 - `docs/release-notes.md`
 - `docs/webapp-checklist.md`
+- `docs/telegram-faq.md`
 - `deploy/systemd/kaven.service`
 - `deploy/docker/docker-compose.yml`

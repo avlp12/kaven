@@ -1,5 +1,5 @@
 """
-Maven Analyzer — 수집 데이터 통합 분석 (Claude API)
+Kaven Analyzer — 수집 데이터 통합 분석 (LLM API)
 
 OpenClaw 게이트웨이(localhost:18789) 또는 직접 Anthropic API 호출.
 지정학 이벤트 분석 → 투자 신호 생성.
@@ -13,7 +13,7 @@ from typing import Any
 
 import aiohttp
 
-logger = logging.getLogger("maven.analyzer")
+logger = logging.getLogger("kaven.analyzer")
 
 ANALYSIS_SYSTEM_PROMPT = """당신은 지정학 위험 분석가이자 투자 전략가입니다.
 수집된 다중 데이터 소스(AIS 선박 추적, ADS-B 항공기 추적, 뉴스, X 소셜 데이터)를 종합 분석하여

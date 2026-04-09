@@ -15,7 +15,7 @@ from typing import Any
 import aiohttp
 import feedparser
 
-logger = logging.getLogger("maven.news")
+logger = logging.getLogger("kaven.news")
 
 # 지정학 키워드
 GEOPOLITICAL_KEYWORDS = [
@@ -92,7 +92,7 @@ async def _collect_rss(session: aiohttp.ClientSession) -> list[dict[str, Any]]:
             async with session.get(
                 feed_url,
                 timeout=aiohttp.ClientTimeout(total=15),
-                headers={"User-Agent": "Maven/1.0"}
+                headers={"User-Agent": "Kaven/0.0.01"}
             ) as resp:
                 if resp.status != 200:
                     logger.warning(f"RSS {feed_name} HTTP {resp.status}")

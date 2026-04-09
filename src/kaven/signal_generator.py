@@ -2,9 +2,8 @@
 Signal Generator — 지정학 이벤트 severity 기반 알림 발송
 
 severity 1-2: 로그만 저장
-severity 3+: 텔레그램 topic:5052 (Maven 전용 채널) 알림 — 한국어
-severity 5:  알리스님 개인 DM 즉시 알림
-※ topic:2, topic:37 발송 완전 제거 (2026-03-07 알리스 지시)
+severity 3+: 텔레그램 topic:5052 (Kaven 전용 채널) 알림 — 한국어
+severity 5:  사용자님 개인 DM 즉시 알림
 
 OpenClaw message API 우선 사용, 실패 시 Bot API 직접 호출.
 """
@@ -17,13 +16,13 @@ from typing import Any
 
 import aiohttp
 
-logger = logging.getLogger("maven.signal")
+from src.kaven.version import __version__
+
+logger = logging.getLogger("kaven.signal")
 
 # 텔레그램 설정
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1003868141703")
-TOPIC_MAVEN = int(os.getenv("TELEGRAM_TOPIC_MAVEN", "5052"))   # Maven 전용 토픽 (알리스 지시 2026-03-07)
-TOPIC_GEOPOLITICS = int(os.getenv("TELEGRAM_TOPIC_GEOPOLITICS", "37"))   # 레거시 (사용 안 함)
-TOPIC_INVESTMENT = int(os.getenv("TELEGRAM_TOPIC_INVESTMENT", "2"))       # 레거시 (사용 안 함)
+TOPIC_MAVEN = int(os.getenv("TELEGRAM_TOPIC_MAVEN", "5052"))   # Kaven 전용 토픽 
 USER_DM = os.getenv("TELEGRAM_USER_DM", "40130797")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 GATEWAY_URL = os.getenv("OPENCLAW_GATEWAY_URL", "http://localhost:18789")
@@ -82,13 +81,13 @@ async def process_signals(events: list[dict[str, Any]]) -> dict[str, Any]:
             f"| {event.get('signal', 'watch')}"
         )
         
-        # severity 3+: topic:5052 (Maven 전용) 알림만
+        # severity 3+: topic:5052 (Kaven 전용) 알림만
         if severity >= 3:
             try:
                 msg = _format_message(event)
                 await _send_telegram(msg, CHAT_ID, TOPIC_MAVEN)
                 sent_count += 1
-                logger.info(f"topic:5052 Maven 알림 발송 완료 (severity {severity})")
+                logger.info(f"topic:5052 Kaven 알림 발송 완료 (severity {severity})")
             except Exception as e:
                 logger.error(f"topic:5052 알림 실패: {e}")
                 errors.append(str(e))
@@ -120,7 +119,7 @@ def _format_message(event: dict) -> str:
     confidence = event.get("confidence", 0)
     
     lines = [
-        f"{emoji} Maven 지정학 경보 [Lv.{severity}/5]",
+        f"{emoji} Kaven v{__version__} 지정학 경보 [Lv.{severity}/5]",
         "",
         f"📋 {event.get('event', '이벤트 정보 없음')}",
         f"📂 {category}",
@@ -148,7 +147,7 @@ def _format_investment_message(event: dict) -> str:
     signal = SIGNAL_LABEL.get(event.get("signal", "watch"), "👀 관망")
     
     lines = [
-        f"{emoji} Maven 투자 신호 [Lv.{severity}/5]",
+        f"{emoji} Kaven v{__version__} 투자 신호 [Lv.{severity}/5]",
         "",
         f"🌐 {event.get('event', '')}",
         f"📊 {signal}",
@@ -168,7 +167,7 @@ def _format_investment_message(event: dict) -> str:
 def _format_urgent_message(event: dict) -> str:
     """긴급 DM 메시지 포맷."""
     return (
-        f"🚨🚨🚨 Maven 긴급 경보\n\n"
+        f"🚨🚨🚨 Kaven v{__version__} 긴급 경보\n\n"
         f"{event.get('event', '')}\n\n"
         f"신호: {event.get('signal', 'watch').upper()}\n"
         f"자산: {', '.join(event.get('affected_assets', []))}\n\n"

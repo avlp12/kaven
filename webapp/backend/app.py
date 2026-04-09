@@ -11,8 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from src.kaven.kaven import LOG_DIR, run_once
+from src.kaven.version import __version__
 
-app = FastAPI(title="Kaven Web API", version="0.1.0")
+app = FastAPI(title="Kaven Web API", version=__version__)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,13 +25,18 @@ app.add_middleware(
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "kaven-web-api"}
+    return {"status": "ok", "service": "kaven-web-api", "version": __version__}
 
 
 @app.get("/runs/latest")
 def latest_run() -> dict[str, Any]:
-    today_file = LOG_DIR / f"maven_{datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
-    if not today_file.exists():
+    today = datetime.now(timezone.utc).strftime('%Y%m%d')
+    candidates = [
+        LOG_DIR / f"kaven_{today}.jsonl",
+        LOG_DIR / f"maven_{today}.jsonl",  # 하위호환
+    ]
+    today_file = next((p for p in candidates if p.exists()), None)
+    if today_file is None:
         raise HTTPException(status_code=404, detail="No run log found for today")
 
     last_line = None
@@ -47,7 +53,8 @@ def latest_run() -> dict[str, Any]:
 
 def _iter_runs() -> list[dict[str, Any]]:
     runs: list[dict[str, Any]] = []
-    for log_file in sorted(Path(LOG_DIR).glob("maven_*.jsonl")):
+    log_files = list(Path(LOG_DIR).glob("kaven_*.jsonl")) + list(Path(LOG_DIR).glob("maven_*.jsonl"))
+    for log_file in sorted(log_files):
         with log_file.open("r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
@@ -103,7 +110,9 @@ async def trigger_run_once() -> dict[str, Any]:
 
 @app.get("/runs/files")
 def list_run_files() -> dict[str, list[str]]:
-    files = sorted([p.name for p in Path(LOG_DIR).glob("maven_*.jsonl")])
+    files = sorted([p.name for p in Path(LOG_DIR).glob("kaven_*.jsonl")])
+    if not files:  # 하위호환
+        files = sorted([p.name for p in Path(LOG_DIR).glob("maven_*.jsonl")])
     return {"files": files}
 
 

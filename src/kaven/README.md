@@ -20,7 +20,7 @@ python src/kaven/kaven.py --watch --interval 5
 
 ## 로그
 
-- 실행 로그: `src/kaven/logs/maven_YYYYMMDD.jsonl`
+- 실행 로그: `src/kaven/logs/kaven_YYYYMMDD.jsonl`
 - dedup 캐시: `src/kaven/logs/sent_cache.json`
 
 ## 주의

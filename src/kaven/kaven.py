@@ -20,6 +20,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.kaven.version import __version__
+
 SCRIPT_DIR = Path(__file__).parent
 
 
@@ -53,7 +55,7 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout),
     ],
 )
-logger = logging.getLogger("maven")
+logger = logging.getLogger("kaven")
 
 async def run_collectors() -> dict:
     """모든 수집기를 병렬 실행. 개별 실패 허용."""
@@ -390,7 +392,7 @@ async def run_once():
     from signal_generator import process_signals
 
     start = datetime.now(timezone.utc)
-    logger.info(f"Kaven 실행 시작: {start.isoformat()}")
+    logger.info(f"Kaven v{__version__} 실행 시작: {start.isoformat()}")
     
     # 1. 데이터 수집
     collected = await run_collectors()
@@ -420,6 +422,7 @@ async def run_once():
     # 4. 로그 저장
     end = datetime.now(timezone.utc)
     log_entry = {
+        "version": __version__,
         "run_id": start.strftime("%Y%m%d_%H%M%S"),
         "started_at": start.isoformat(),
         "ended_at": end.isoformat(),
@@ -432,7 +435,7 @@ async def run_once():
         "signal_result": signal_result,
     }
     
-    log_file = LOG_DIR / f"maven_{start.strftime('%Y%m%d')}.jsonl"
+    log_file = LOG_DIR / f"kaven_{start.strftime('%Y%m%d')}.jsonl"
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
     

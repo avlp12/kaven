@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maven 지정학 이벤트 시각화</title>
+    <title>Kaven 지정학 이벤트 시각화</title>
     <style>
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
         #globe { width: 100vw; height: 100vh; }
@@ -52,7 +52,7 @@
 <body>
     <div id="globe"></div>
     <div id="info">
-        <h2>🌍 Maven 지정학 이벤트</h2>
+        <h2>🌍 Kaven 지정학 이벤트</h2>
         <div id="events"></div>
     </div>
     <div id="legend">
@@ -65,8 +65,8 @@
     <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
     <script src="https://unpkg.com/globe.gl@2/dist/globe.gl.min.js"></script>
     <script>
-        // Maven 로그 데이터 (2026-03-26 최신 데이터)
-        const mavenEvents = [
+        // Kaven 로그 데이터 (2026-03-26 최신 데이터)
+        const kavenEvents = [
             { region: "hormuz", lat: 26.5, lng: 56.3, severity: 5, event: "호르무즈 해협 선박 0척 (기준 50척)", category: "energy", assets: ["WTI", "KOSPI", "원/달러"] },
             { region: "taiwan", lat: 23.7, lng: 121.0, severity: 4, event: "대만, 중국의 도발 우려", category: "conflict", assets: ["삼성전자", "SK하이닉스"] },
             { region: "ukraine", lat: 48.4, lng: 31.2, severity: 4, event: "우크라이나, 러시아 봄 공세", category: "conflict", assets: ["KOSPI", "원/달러"] },
@@ -95,7 +95,7 @@
 
         // 이벤트 표시
         const eventsDiv = document.getElementById("events");
-        mavenEvents.forEach(e => {
+        kavenEvents.forEach(e => {
             const div = document.createElement("div");
             div.className = `event severity-${e.severity}`;
             div.innerHTML = `
@@ -110,7 +110,7 @@
             (document.getElementById("globe"))
             .globeImageUrl("https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg")
             .backgroundImageUrl("https://unpkg.com/three-globe/example/img/night-sky.png")
-            .pointsData(mavenEvents)
+            .pointsData(kavenEvents)
             .pointLat("lat")
             .pointLng("lng")
             .pointColor(d => severityColors[d.severity])

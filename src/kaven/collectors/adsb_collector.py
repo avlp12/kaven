@@ -16,7 +16,7 @@ from typing import Any
 
 import aiohttp
 
-logger = logging.getLogger("maven.adsb")
+logger = logging.getLogger("kaven.adsb")
 
 # 감시 공역 정의 (bounding box: lat_min, lat_max, lon_min, lon_max)
 WATCH_AIRSPACES = {

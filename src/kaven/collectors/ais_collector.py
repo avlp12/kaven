@@ -15,7 +15,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger("maven.ais")
+logger = logging.getLogger("kaven.ais")
 
 # 모니터링 지역 정의
 WATCH_ZONES = {
