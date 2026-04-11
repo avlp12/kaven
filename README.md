@@ -4,12 +4,21 @@
 
 Kaven은 AIS/ADS-B/뉴스/소셜 데이터를 수집하고, LLM 분석 + dedup 후 텔레그램 알림/로그 저장까지 수행하는 지정학 조기경보 시스템입니다.
 
-현재 버전: **0.0.01**
+현재 버전: **0.0.02**
 
 버전 정책:
 - 모든 업데이트 시 버전을 올리고(`0.0.01`부터 시작), 릴리스 노트/알림 헤더/로그 메타데이터에 동일 버전을 표시합니다.
 
-### 최근 업데이트 (v0.0.01)
+### 최근 업데이트 (v0.0.02)
+- **이슈 #7 정책 반영** — 원격(Convex) 업로드를 `CONVEX_SITE_URL` 기반 opt-in으로 전환. 미설정 시 외부 전송 완전 비활성화(로컬 로그만 보존).
+- 하드코딩된 엔드포인트 `https://exciting-cod-257.convex.site/addMavenRun` 완전 제거. 대신 `CONVEX_SITE_URL` + `CONVEX_EVENT_PATH`(기본 `/addKavenRun`)를 동적으로 조합.
+- 원격 전송 로직을 `_upload_remote_if_enabled()` 헬퍼로 분리 — 엔드포인트 정규화(trailing/leading slash), 실패 시 예외 전파 방지(로컬 로그 보존 우선).
+- 정책 회귀 방지용 테스트 스위트 `tests/test_kaven_convex_policy.py` 추가(9건). 소스 문자열 정적 검사로 하드코딩 엔드포인트 부재까지 검증하여 upstream sync 회귀 차단.
+- `make test-kaven` 타깃에 convex policy 테스트 포함.
+- `.gitignore` 신규 추가(`__pycache__/`, `.env`, `.port_sessions/` 등 커버).
+- User-Agent 헤더 및 텔레그램 경보 헤더/긴급 경보에 새 버전(`v0.0.02`) 표시.
+
+### 이전 업데이트 (v0.0.01)
 - 사용자 알림 문구의 `Maven` 표기를 `Kaven`으로 통일했습니다.
 - 실행 로그 파일명을 `kaven_YYYYMMDD.jsonl`로 전환했고, 구버전 `maven_*.jsonl`은 읽기 호환을 유지합니다.
 - 텔레그램 경보 헤더/긴급 경보에 버전(`v0.0.01`)이 표시됩니다.

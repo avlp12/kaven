@@ -63,7 +63,7 @@ async def _search_via_searxng(query: str) -> list[dict[str, Any]]:
 
     results = []
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Kaven/0.0.01"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Kaven/0.0.02"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
 
@@ -110,7 +110,7 @@ async def _search_via_pinchtab(query: str) -> list[dict[str, Any]]:
         # PinchTab 탭 목록 조회
         req = urllib.request.Request(
             f"{PINCHTAB_BASE}/tabs",
-            headers={"User-Agent": "Kaven/0.0.01"}
+            headers={"User-Agent": "Kaven/0.0.02"}
         )
         with urllib.request.urlopen(req, timeout=5) as resp:
             tabs_data = json.loads(resp.read().decode())
@@ -127,7 +127,7 @@ async def _search_via_pinchtab(query: str) -> list[dict[str, Any]]:
         nav_req = urllib.request.Request(
             f"{PINCHTAB_BASE}/nav",
             data=json.dumps({"tabId": tab_id, "url": search_url}).encode(),
-            headers={"Content-Type": "application/json", "User-Agent": "Kaven/0.0.01"},
+            headers={"Content-Type": "application/json", "User-Agent": "Kaven/0.0.02"},
             method="POST"
         )
         with urllib.request.urlopen(nav_req, timeout=10) as resp:
@@ -139,7 +139,7 @@ async def _search_via_pinchtab(query: str) -> list[dict[str, Any]]:
         # 텍스트 추출
         text_req = urllib.request.Request(
             f"{PINCHTAB_BASE}/text?tabId={tab_id}",
-            headers={"User-Agent": "Kaven/0.0.01"}
+            headers={"User-Agent": "Kaven/0.0.02"}
         )
         with urllib.request.urlopen(text_req, timeout=10) as resp:
             page_text = resp.read().decode(errors="replace")
