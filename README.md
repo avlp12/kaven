@@ -131,12 +131,20 @@ TELEGRAM_CHAT_ID=
 TELEGRAM_TOPIC_MAVEN=5052
 TELEGRAM_USER_DM=
 
+# ===== 원격 백업 (opt-in, 이슈 #7 정책) =====
+# 기본은 로컬 로그만 저장하며 외부 전송은 완전 비활성화됩니다.
+# 필요한 경우에만 CONVEX_SITE_URL을 명시적으로 설정해 opt-in 하세요.
+# CONVEX_EVENT_PATH는 경로 override (기본 /addKavenRun).
+CONVEX_SITE_URL=
+CONVEX_EVENT_PATH=/addKavenRun
+
 # ===== 기타 =====
 OPENCLAW_GATEWAY_URL=http://localhost:18789
 ENV
 ```
 
 > 보안 주의: `.env`는 절대 Git에 커밋하지 마세요.
+> 운영 주의 (이슈 #7 정책): `CONVEX_SITE_URL`을 명시적으로 설정하지 않으면 이벤트 payload는 어떤 외부 엔드포인트로도 전송되지 않습니다. 하드코딩된 Convex endpoint는 제거되었으며, 원격 백업이 필요한 경우에만 opt-in 하세요.
 
 ### 5.3 실행
 ```bash
@@ -197,7 +205,8 @@ python -m http.server 8080 --directory webapp/frontend
 - `CHAT_ID`가 아니라 `TELEGRAM_CHAT_ID`를 써야 함
 - `.env`는 루트가 아니라 `src/kaven/.env`에 있어야 자동 로드됨
 - SearxNG 미구동 시 뉴스/소셜 수집 저하
-- `Convex 저장 실패 (로컬 로그는 유지)`가 떠도 로컬 로그는 정상 저장됨
+- `CONVEX_SITE_URL 미설정 — 외부 전송 스킵` 로그: 정상 동작입니다. 기본 정책(이슈 #7)상 외부 전송은 opt-in이며, 로컬 로그는 이미 저장되어 있습니다. 원격 백업이 필요하면 `CONVEX_SITE_URL`을 설정하세요.
+- `Convex 저장 실패 (로컬 로그는 유지)`가 떠도 로컬 로그는 정상 저장됨 (원격 실패는 예외로 전파되지 않음)
 
 ### 텔레그램 FAQ
 - 텔레그램 봇 생성, `TELEGRAM_CHAT_ID`/토픽 ID 확인, DM 설정, 오류 해결은 아래 문서를 참고하세요.

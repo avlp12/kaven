@@ -386,6 +386,52 @@ def _update_cache(cache: dict, events: list[dict]):
             sent_list.append(new_entry)
 
 
+def _upload_remote_if_enabled(log_entry: dict, events: list, signal_result: dict) -> None:
+    """
+    원격(Convex) 업로드 — 명시적 opt-in 시에만 수행.
+
+    정책 (이슈 #7):
+    - 기본 동작: 외부 전송 비활성화 (로컬 로그만 유지)
+    - ``CONVEX_SITE_URL`` 환경변수가 설정된 경우에만 POST
+    - 경로는 ``CONVEX_EVENT_PATH`` (기본 ``/addKavenRun``)
+    - 하드코딩된 endpoint는 사용하지 않음
+    - 원격 실패 시에도 로컬 로그는 이미 저장되어 있으므로 무관
+    """
+    if not events:
+        return
+
+    site_url = os.environ.get("CONVEX_SITE_URL", "").strip()
+    if not site_url:
+        logger.info(
+            "CONVEX_SITE_URL 미설정 — 외부 전송 스킵 (로컬 로그만 보존)"
+        )
+        return
+
+    event_path = os.environ.get("CONVEX_EVENT_PATH", "/addKavenRun").strip()
+    if not event_path.startswith("/"):
+        event_path = "/" + event_path
+    endpoint = site_url.rstrip("/") + event_path
+
+    try:
+        import urllib.request
+        payload = json.dumps({
+            "run_id": log_entry["run_id"],
+            "started_at": log_entry["started_at"],
+            "events": events,
+            "signal_result": signal_result,
+        }, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(
+            endpoint,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            logger.info(f"Convex 저장 완료: {resp.read().decode()}")
+    except Exception as e:
+        logger.warning(f"Convex 저장 실패 (로컬 로그는 유지): {e}")
+
+
 async def run_once():
     """1회 실행: 수집 → 분석 → 중복제거 → 신호 발송 → 로그 저장."""
     from analyzer import analyze
@@ -441,26 +487,8 @@ async def run_once():
     
     logger.info(f"로그 저장: {log_file}")
 
-    # Convex 클라우드에 저장 (Vercel 배포본용)
-    if events:
-        try:
-            import urllib.request
-            payload = json.dumps({
-                "run_id": log_entry["run_id"],
-                "started_at": log_entry["started_at"],
-                "events": events,
-                "signal_result": signal_result,
-            }, ensure_ascii=False).encode("utf-8")
-            req = urllib.request.Request(
-                "https://exciting-cod-257.convex.site/addMavenRun",
-                data=payload,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                logger.info(f"Convex 저장 완료: {resp.read().decode()}")
-        except Exception as e:
-            logger.warning(f"Convex 저장 실패 (로컬 로그는 유지): {e}")
+    # 원격(Convex) 백업 — opt-in (CONVEX_SITE_URL 설정 시에만)
+    _upload_remote_if_enabled(log_entry, events, signal_result)
 
     logger.info(f"Kaven 실행 완료: {(end - start).total_seconds():.1f}초 소요")
     
