@@ -4,6 +4,41 @@
 
 ---
 
+## v0.0.03 — 2026-04-13
+
+### 주요 변경사항 (대시보드 기능 확장)
+1. **일일 분석 리포트 자동 생성** (`/report`)
+   - `src/kaven/report_generator.py` 신규 모듈
+   - JSONL 로그에서 이벤트 로드 → 중복 제거 → 지역/카테고리/자산별 집계 → 마크다운 브리핑 자동 생성
+   - API 키 없이 순수 규칙 기반 동작
+   - `GET /report` (오늘), `GET /report/{YYYYMMDD}` (과거), `GET /report/dates` (목록)
+2. **인터랙티브 분쟁 지도** (`/map`)
+   - globe.gl 3D 지구본에 `GET /map/data` API로 실시간 이벤트 표시
+   - Severity별 색상 마커, 클릭 줌, 자동 회전
+   - 기존 하드코딩 시각화를 API 기반으로 교체
+3. **지역별 분쟁 현황 가이드** (`/guide`)
+   - 9개 감시구역: 호르무즈, 대만, 한반도, 우크라이나, 인도·파키스탄, 남중국해, 홍해·예멘, 사헬, 전지구
+   - `GET /guide` (전체 현황), `GET /guide/{region}?days=7` (상세 + 7일 히스토리)
+4. **프론트엔드 전면 리뉴얼**
+   - 단일 테이블 → 탭 기반 다크 테마 SPA (Dashboard / Report / Map / Guide)
+   - Severity 뱃지, 통계 카드, 반응형 레이아웃, 지역 카드 그리드
+5. **테스트 추가**
+   - `tests/test_report_generator.py` 6건 (빈 날짜, 단일 이벤트, dedup, 다지역 정렬, 자산 집계, 카테고리 분포)
+
+### 운영 영향
+- Breaking change 없음 (기존 API 변경 없이 신규 엔드포인트만 추가)
+- 웹 대시보드 접속 방법 동일: `http://127.0.0.1:8080`
+
+### 검증 결과
+- `python3 -m pytest -v` → **20 passed**
+- `make test-kaven` → 통과
+
+### 관련 링크
+- PR: #12 (`Add daily report, interactive map, and region guide features`)
+- Merge commit: `407b84d`
+
+---
+
 ## v0.0.02 — 2026-04-11
 
 ### 주요 변경사항 (이슈 #7 대응)

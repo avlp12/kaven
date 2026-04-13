@@ -303,3 +303,115 @@ def map_data() -> dict[str, Any]:
             "event": top_event.get("event", ""),
         })
     return {"date": report["date"], "points": points}
+
+
+# ── Portfolio (Investment Impact) ───────────────────────────────
+
+_ASSET_META = {
+    "WTI": {"type": "commodity", "description": "서부 텍사스 원유 (에너지 벤치마크)"},
+    "KOSPI": {"type": "index", "description": "한국 종합주가지수"},
+    "원/달러": {"type": "currency", "description": "USD/KRW 환율"},
+    "삼성전자": {"type": "equity", "description": "반도체·전자 (KRX 005930)"},
+    "SK하이닉스": {"type": "equity", "description": "메모리 반도체 (KRX 000660)"},
+    "TSMC": {"type": "equity", "description": "글로벌 파운드리 1위 (TWSE 2330)"},
+    "현대차": {"type": "equity", "description": "자동차 (KRX 005380)"},
+    "LG에너지솔루션": {"type": "equity", "description": "배터리 (KRX 373220)"},
+}
+
+
+def _portfolio_history(log_dir: Path, days: int = 7) -> dict[str, Any]:
+    """자산별 이벤트 히스토리 집계."""
+    from datetime import timedelta
+    from collections import defaultdict
+
+    today = datetime.now(timezone.utc)
+    asset_daily: dict[str, list[dict]] = defaultdict(list)  # asset -> [{date, severity, count, events}]
+    all_assets: dict[str, dict] = defaultdict(lambda: {"total_events": 0, "max_severity": 0, "signals": defaultdict(int)})
+
+    for d in range(days):
+        dt = today - timedelta(days=d)
+        date_str = dt.strftime("%Y%m%d")
+        display = dt.strftime("%Y-%m-%d")
+
+        day_events: dict[str, list] = defaultdict(list)
+        for prefix in ("kaven_", "maven_"):
+            path = log_dir / f"{prefix}{date_str}.jsonl"
+            if not path.exists():
+                continue
+            with path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        run = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    for ev in run.get("events", []):
+                        for asset in ev.get("affected_assets", []):
+                            day_events[asset].append(ev)
+
+        # 모든 자산에 대해 날짜별 엔트리 기록
+        seen_assets = set()
+        for asset, evts in day_events.items():
+            seen_assets.add(asset)
+            max_sev = max(e.get("severity", 0) for e in evts)
+            asset_daily[asset].append({
+                "date": display,
+                "max_severity": max_sev,
+                "event_count": len(evts),
+            })
+            all_assets[asset]["total_events"] += len(evts)
+            all_assets[asset]["max_severity"] = max(all_assets[asset]["max_severity"], max_sev)
+            for ev in evts:
+                sig = ev.get("signal", "watch")
+                all_assets[asset]["signals"][sig] += 1
+
+        # 해당 날에 언급 안 된 자산은 0으로 채움
+        for asset in asset_daily:
+            if asset not in seen_assets:
+                asset_daily[asset].append({"date": display, "max_severity": 0, "event_count": 0})
+
+    # 날짜순 정렬
+    for asset in asset_daily:
+        asset_daily[asset].sort(key=lambda x: x["date"])
+
+    # 결과 조합
+    assets = []
+    for asset, info in all_assets.items():
+        meta = _ASSET_META.get(asset, {"type": "other", "description": asset})
+        dominant_signal = max(info["signals"].items(), key=lambda x: x[1])[0] if info["signals"] else "watch"
+        assets.append({
+            "name": asset,
+            "type": meta["type"],
+            "description": meta["description"],
+            "total_events": info["total_events"],
+            "max_severity": info["max_severity"],
+            "dominant_signal": dominant_signal,
+            "signals": dict(info["signals"]),
+            "history": asset_daily.get(asset, []),
+        })
+
+    assets.sort(key=lambda x: (-x["max_severity"], -x["total_events"]))
+    return assets
+
+
+@app.get("/portfolio")
+def portfolio_overview(days: int = 7) -> dict[str, Any]:
+    """투자 영향 대시보드 — 자산별 이벤트 히트맵."""
+    assets = _portfolio_history(LOG_DIR, days)
+    return {
+        "days": days,
+        "asset_count": len(assets),
+        "assets": assets,
+    }
+
+
+@app.get("/portfolio/{asset_name}")
+def portfolio_asset_detail(asset_name: str, days: int = 14) -> dict[str, Any]:
+    """특정 자산의 상세 이벤트 히스토리."""
+    all_assets = _portfolio_history(LOG_DIR, days)
+    match = next((a for a in all_assets if a["name"] == asset_name), None)
+    if not match:
+        raise HTTPException(status_code=404, detail=f"Asset not found: {asset_name}")
+    return match
