@@ -9,8 +9,8 @@ Social Collector — X(Twitter) 지정학 키워드 수집
 import asyncio
 import json
 import logging
+import os
 import re
-import subprocess
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -30,8 +30,8 @@ SEARCH_KEYWORDS = [
     "Gaza ceasefire",
 ]
 
-PINCHTAB_BASE = "http://localhost:9867"
-SEARXNG_BASE = "http://localhost:8080"
+PINCHTAB_BASE = os.environ.get("PINCHTAB_URL", "http://localhost:9867").rstrip("/")
+SEARXNG_BASE = os.environ.get("SEARXNG_URL", "http://localhost:8080").rstrip("/")
 
 
 async def collect() -> list[dict[str, Any]]:
@@ -146,8 +146,8 @@ async def _search_via_pinchtab(query: str) -> list[dict[str, Any]]:
 
         # 트윗 텍스트 파싱 (X 페이지 구조 기준)
         # 줄 단위로 분리, 비어있지 않고 충분히 긴 줄만 추출
-        lines = [l.strip() for l in page_text.split("\n") if len(l.strip()) > 30]
-        tweet_candidates = [l for l in lines if not l.startswith("http") and len(l) < 300][:5]
+        lines = [line.strip() for line in page_text.split("\n") if len(line.strip()) > 30]
+        tweet_candidates = [line for line in lines if not line.startswith("http") and len(line) < 300][:5]
 
         for text in tweet_candidates:
             results.append({

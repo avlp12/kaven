@@ -1,0 +1,7 @@
+# Kaven development / CI dependencies
+-r requirements.txt
+fastapi>=0.110
+uvicorn>=0.29
+pytest>=9.0
+ruff>=0.4
+mypy>=1.10

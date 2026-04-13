@@ -1,0 +1,46 @@
+[project]
+name = "kaven"
+version = "0.0.03"
+description = "Korean AI-based Vigilance for Event Navigation — 지정학 조기경보 + 투자 신호 시스템"
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp>=3.9",
+    "feedparser>=6.0",
+    "websockets>=12.0",
+]
+
+[project.optional-dependencies]
+web = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
+dev = [
+    "pytest>=9.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+# 테스트 파일은 스텁 주입 후 import가 필수이므로 E402 허용
+"tests/*.py" = ["E402", "E501"]
+# LLM 프롬프트 문자열이 길어 줄 나눔 불가
+"src/kaven/analyzer.py" = ["E501"]
+# 지역 설명 문자열/defaultdict 한 줄 정의
+"webapp/backend/app.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+explicit_package_bases = true
+mypy_path = "."
+namespace_packages = true
+ignore_missing_imports = true
+warn_unused_configs = true
+warn_return_any = true
+check_untyped_defs = true

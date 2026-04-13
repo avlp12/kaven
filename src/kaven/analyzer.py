@@ -70,21 +70,21 @@ JSON 배열만 출력하세요. 추가 설명 없이 순수 JSON만."""
 
 async def analyze(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
     """수집된 데이터를 LLM API로 분석."""
-    
+
     # 데이터 요약 (토큰 절약)
     summary = _summarize_data(collected_data)
-    
+
     if not summary.strip():
         logger.info("분석할 데이터 없음")
         return []
-    
+
     # OpenAI 호환 API(로컬 LLM 포함) 우선, Gemini/Anthropic 순으로 폴백
     openai_base_url = os.getenv("OPENAI_BASE_URL", "").strip().rstrip("/")
     openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
     openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
     gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
     anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-    
+
     result = None
     if openai_base_url:
         try:
@@ -102,17 +102,17 @@ async def analyze(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
             result = await _call_gemini(gemini_key, summary)
         except Exception as e:
             logger.warning(f"Gemini API 분석 실패: {e}")
-    
+
     if result is None and anthropic_key:
         try:
             result = await _call_anthropic_direct(anthropic_key, summary)
         except Exception as e:
             logger.error(f"Anthropic 직접 API 분석 실패: {e}")
-    
+
     if result is None:
         logger.error("모든 분석 경로 실패")
         result = _fallback_analysis(collected_data)
-    
+
     # 모든 이벤트에 collected_at 주입 (없는 경우 현재 시각)
     now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -142,7 +142,7 @@ async def analyze(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
 def _summarize_data(collected_data: dict[str, Any]) -> str:
     """수집 데이터를 분석용 텍스트로 요약 (토큰 절약)."""
     parts = []
-    
+
     # AIS 데이터
     ais_data = collected_data.get("ais", [])
     if ais_data:
@@ -158,7 +158,7 @@ def _summarize_data(collected_data: dict[str, Any]) -> str:
                 f"정박 {item.get('stationary_count', '?')}척, "
                 f"이상: {anomaly or '없음'}"
             )
-    
+
     # ADS-B 데이터
     adsb_data = collected_data.get("adsb", [])
     if adsb_data:
@@ -175,7 +175,7 @@ def _summarize_data(collected_data: dict[str, Any]) -> str:
                     f"군용기 {item.get('military_count', '?')}기, "
                     f"이상: {anomaly or '없음'}"
                 )
-    
+
     # 뉴스 데이터
     news_data = collected_data.get("news", [])
     if news_data:
@@ -186,7 +186,7 @@ def _summarize_data(collected_data: dict[str, Any]) -> str:
             )
             if item.get("summary"):
                 parts.append(f"  요약: {item['summary'][:200]}")
-    
+
     # 소셜 데이터
     social_data = collected_data.get("social", [])
     real_tweets = [s for s in social_data if s.get("text")]
@@ -200,7 +200,7 @@ def _summarize_data(collected_data: dict[str, Any]) -> str:
                 f"engagement:{item.get('engagement', 0)} — "
                 f"{item.get('text', '')[:200]}"
             )
-    
+
     return "\n".join(parts)
 
 
@@ -259,7 +259,7 @@ async def _call_openai_compatible(
 async def _call_gemini(api_key: str, summary: str) -> list[dict] | None:
     """Google Gemini API 호출."""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-    
+
     payload = {
         "contents": [
             {
@@ -274,7 +274,7 @@ async def _call_gemini(api_key: str, summary: str) -> list[dict] | None:
             "temperature": 0.2,
         },
     }
-    
+
     async with aiohttp.ClientSession() as session:
         async with session.post(
             url, json=payload,
@@ -284,23 +284,23 @@ async def _call_gemini(api_key: str, summary: str) -> list[dict] | None:
                 body = await resp.text()
                 logger.warning(f"Gemini API {resp.status}: {body[:200]}")
                 return None
-            
+
             data = await resp.json()
-    
+
     # Gemini 응답에서 텍스트 추출
     text = ""
     for candidate in data.get("candidates", []):
         content = candidate.get("content", {})
         for part in content.get("parts", []):
             text += part.get("text", "")
-    
+
     return _parse_analysis_response(text)
 
 
 async def _call_openclaw_gateway(gateway_url: str, summary: str) -> list[dict] | None:
     """OpenClaw 게이트웨이의 Messages API 호출."""
     url = f"{gateway_url}/v1/messages"
-    
+
     payload = {
         "model": "anthropic/claude-sonnet-4-6",
         "max_tokens": 2000,
@@ -312,13 +312,13 @@ async def _call_openclaw_gateway(gateway_url: str, summary: str) -> list[dict] |
             }
         ],
     }
-    
+
     headers = {
         "Content-Type": "application/json",
         "x-api-key": "openclaw",
         "anthropic-version": "2023-06-01",
     }
-    
+
     async with aiohttp.ClientSession() as session:
         async with session.post(
             url, json=payload, headers=headers,
@@ -328,22 +328,22 @@ async def _call_openclaw_gateway(gateway_url: str, summary: str) -> list[dict] |
                 body = await resp.text()
                 logger.warning(f"OpenClaw gateway {resp.status}: {body[:200]}")
                 return None
-            
+
             data = await resp.json()
-    
+
     # Claude 응답에서 텍스트 추출
     text = ""
     for block in data.get("content", []):
         if block.get("type") == "text":
             text += block.get("text", "")
-    
+
     return _parse_analysis_response(text)
 
 
 async def _call_anthropic_direct(api_key: str, summary: str) -> list[dict] | None:
     """Anthropic API 직접 호출."""
     url = "https://api.anthropic.com/v1/messages"
-    
+
     payload = {
         "model": "claude-sonnet-4-20250514",
         "max_tokens": 2000,
@@ -355,13 +355,13 @@ async def _call_anthropic_direct(api_key: str, summary: str) -> list[dict] | Non
             }
         ],
     }
-    
+
     headers = {
         "Content-Type": "application/json",
         "x-api-key": api_key,
         "anthropic-version": "2023-06-01",
     }
-    
+
     async with aiohttp.ClientSession() as session:
         async with session.post(
             url, json=payload, headers=headers,
@@ -371,21 +371,21 @@ async def _call_anthropic_direct(api_key: str, summary: str) -> list[dict] | Non
                 body = await resp.text()
                 logger.warning(f"Anthropic API {resp.status}: {body[:200]}")
                 return None
-            
+
             data = await resp.json()
-    
+
     text = ""
     for block in data.get("content", []):
         if block.get("type") == "text":
             text += block.get("text", "")
-    
+
     return _parse_analysis_response(text)
 
 
 def _parse_analysis_response(text: str) -> list[dict]:
     """Claude 응답 텍스트에서 JSON 배열 추출."""
     text = text.strip()
-    
+
     # JSON 배열 직접 파싱 시도
     try:
         result = json.loads(text)
@@ -395,7 +395,7 @@ def _parse_analysis_response(text: str) -> list[dict]:
             return [result]
     except json.JSONDecodeError:
         pass
-    
+
     # 코드블록 내 JSON 추출
     if "```" in text:
         for block in text.split("```"):
@@ -410,7 +410,7 @@ def _parse_analysis_response(text: str) -> list[dict]:
                     return [result]
             except json.JSONDecodeError:
                 continue
-    
+
     # [ ... ] 패턴 찾기
     start = text.find("[")
     end = text.rfind("]")
@@ -421,7 +421,7 @@ def _parse_analysis_response(text: str) -> list[dict]:
                 return _dedup_events(result)
         except json.JSONDecodeError:
             pass
-    
+
     logger.error(f"분석 응답 파싱 실패: {text[:200]}")
     return []
 
@@ -430,15 +430,15 @@ def _dedup_events(events: list[dict]) -> list[dict]:
     """동일 이벤트 중복 제거 — event 문자열 유사도 기반."""
     if not events:
         return events
-    
+
     seen = []
     deduped = []
-    
+
     for ev in events:
         event_text = ev.get("event", "").strip()
         if not event_text:
             continue
-        
+
         # 이미 본 이벤트와 80% 이상 겹치면 중복으로 판단
         is_dup = False
         ev_words = set(event_text.lower().split())
@@ -451,14 +451,14 @@ def _dedup_events(events: list[dict]) -> list[dict]:
                 is_dup = True
                 logger.debug(f"중복 이벤트 제거: '{event_text[:50]}' ≈ '{seen_text[:50]}'")
                 break
-        
+
         if not is_dup:
             seen.append(event_text)
             deduped.append(ev)
-    
+
     if len(deduped) < len(events):
         logger.info(f"중복 이벤트 {len(events) - len(deduped)}건 제거 ({len(events)}→{len(deduped)}건)")
-    
+
     return deduped
 
 
@@ -466,7 +466,7 @@ def _fallback_analysis(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
     """API 호출 실패 시 규칙 기반 분석 (폴백)."""
     events = []
     now = datetime.now(timezone.utc).isoformat()
-    
+
     # AIS 이상 감지
     for item in collected_data.get("ais", []):
         if item.get("anomaly"):
@@ -481,7 +481,7 @@ def _fallback_analysis(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
                 "timestamp": now,
                 "fallback": True,
             })
-    
+
     # ADS-B 이상 감지
     for item in collected_data.get("adsb", []):
         if item.get("anomaly"):
@@ -492,7 +492,7 @@ def _fallback_analysis(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
                 assets = ["삼성전자", "SK하이닉스", "TSMC"]
             elif "korean" in item.get("zone", ""):
                 assets = ["KOSPI", "원/달러", "삼성전자"]
-            
+
             events.append({
                 "event": f"군용기 이상 집결: {item.get('zone_name', 'unknown')}",
                 "severity": item.get("severity_hint", 3),
@@ -504,7 +504,7 @@ def _fallback_analysis(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
                 "timestamp": now,
                 "fallback": True,
             })
-    
+
     # 뉴스 클러스터 감지
     news_data = collected_data.get("news", [])
     if len(news_data) >= 5:
@@ -519,5 +519,5 @@ def _fallback_analysis(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
             "timestamp": now,
             "fallback": True,
         })
-    
+
     return events

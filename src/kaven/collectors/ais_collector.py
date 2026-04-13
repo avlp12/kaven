@@ -45,15 +45,15 @@ ANOMALY_THRESHOLD_HIGH = 2.0  # 200% 이상 증가하면 이상
 async def collect(timeout_seconds: int = 30) -> list[dict[str, Any]]:
     """
     AIS 데이터를 수집하고 이상 감지 결과를 반환.
-    
+
     API 키가 없으면 시뮬레이션 데이터 반환.
     """
     api_key = os.getenv("AISSTREAM_API_KEY", "").strip()
-    
+
     if not api_key:
         logger.warning("AISSTREAM_API_KEY 미설정 — 시뮬레이션 모드로 동작")
         return _simulate_data()
-    
+
     try:
         return await _collect_live(api_key, timeout_seconds)
     except Exception as e:
@@ -68,10 +68,10 @@ async def collect(timeout_seconds: int = 30) -> list[dict[str, Any]]:
 
 async def _collect_live(api_key: str, timeout_seconds: int) -> list[dict[str, Any]]:
     """aisstream.io WebSocket 연결로 실시간 데이터 수집."""
-    import websockets  # noqa: delayed import
-    
+    import websockets  # noqa: E402
+
     zone_ships: dict[str, list] = {zone: [] for zone in WATCH_ZONES}
-    
+
     # aisstream.io WebSocket 구독 메시지
     bounding_boxes = []
     for zone in WATCH_ZONES.values():
@@ -79,16 +79,16 @@ async def _collect_live(api_key: str, timeout_seconds: int) -> list[dict[str, An
             [zone["lat_min"], zone["lon_min"]],
             [zone["lat_max"], zone["lon_max"]],
         ])
-    
+
     subscribe_msg = {
         "APIKey": api_key,
         "BoundingBoxes": bounding_boxes,
         "FiltersShipMMSI": [],
         "FilterMessageTypes": ["PositionReport"],
     }
-    
+
     uri = "wss://stream.aisstream.io/v0/stream"
-    
+
     # WebSocket 연결 전 OpenSky REST로 빠르게 선박 수 확인 (fallback 겸용)
     try:
         import aiohttp
@@ -124,20 +124,20 @@ async def _collect_live(api_key: str, timeout_seconds: int) -> list[dict[str, An
         async with websockets.connect(uri, open_timeout=8) as ws:
             await ws.send(json.dumps(subscribe_msg))
             logger.info("AIS WebSocket 연결 성공")
-            
+
             # timeout_seconds 동안 데이터 수집
             end_time = asyncio.get_event_loop().time() + timeout_seconds
-            
+
             while asyncio.get_event_loop().time() < end_time:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=5)
                     msg = json.loads(raw)
-                    
+
                     if msg.get("MessageType") == "PositionReport":
                         pos = msg.get("Message", {}).get("PositionReport", {})
                         lat = pos.get("Latitude", 0)
                         lon = pos.get("Longitude", 0)
-                        
+
                         for zone_key, zone_def in WATCH_ZONES.items():
                             if (zone_def["lat_min"] <= lat <= zone_def["lat_max"] and
                                 zone_def["lon_min"] <= lon <= zone_def["lon_max"]):
@@ -155,7 +155,7 @@ async def _collect_live(api_key: str, timeout_seconds: int) -> list[dict[str, An
     except Exception as e:
         logger.error(f"WebSocket 연결 실패: {e}")
         raise
-    
+
     return _analyze_zones(zone_ships)
 
 
@@ -163,27 +163,27 @@ def _analyze_zones(zone_ships: dict[str, list]) -> list[dict[str, Any]]:
     """각 감시 구역의 선박 데이터를 분석하여 이상 감지."""
     results = []
     now = datetime.now(timezone.utc).isoformat()
-    
+
     for zone_key, ships in zone_ships.items():
         zone_name = WATCH_ZONES[zone_key]["name"]
         ship_count = len(ships)
         baseline = BASELINE_SHIP_COUNT.get(zone_key, 50)
         ratio = ship_count / baseline if baseline > 0 else 0
-        
+
         anomaly = None
         if ratio <= ANOMALY_THRESHOLD_LOW:
             anomaly = "ship_count_drop"
         elif ratio >= ANOMALY_THRESHOLD_HIGH:
             anomaly = "ship_count_surge"
-        
+
         # 속도 0 선박 클러스터링 (정박·대기 이상)
         stationary = [s for s in ships if s.get("speed", 0) < 0.5]
         if len(stationary) > ship_count * 0.6 and ship_count > 5:
             anomaly = anomaly or "excessive_stationary"
-        
+
         # 유니크 선박 MMSI 추출
         unique_mmsis = set(s.get("mmsi") for s in ships if s.get("mmsi"))
-        
+
         result = {
             "source": "ais",
             "zone": zone_key,
@@ -196,7 +196,7 @@ def _analyze_zones(zone_ships: dict[str, list]) -> list[dict[str, Any]]:
             "anomaly": anomaly,
             "timestamp": now,
         }
-        
+
         if anomaly:
             result["severity_hint"] = 3 if anomaly == "ship_count_drop" else 2
             result["detail"] = (
@@ -204,9 +204,9 @@ def _analyze_zones(zone_ships: dict[str, list]) -> list[dict[str, Any]]:
                 f"비율 {ratio:.1%}, 정박 {len(stationary)}척"
             )
             logger.warning(f"AIS 이상 감지: {result['detail']}")
-        
+
         results.append(result)
-    
+
     return results
 
 

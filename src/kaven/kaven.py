@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 import os
+import re as _re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -64,7 +65,7 @@ async def run_collectors() -> dict:
     logger.info("=" * 60)
     logger.info("Kaven 데이터 수집 시작")
     logger.info("=" * 60)
-    
+
     # 모든 collector 병렬 실행
     results = await asyncio.gather(
         _safe_collect("ais", ais_collector.collect),
@@ -73,13 +74,13 @@ async def run_collectors() -> dict:
         _safe_collect("social", social_collector.collect),
         return_exceptions=False,  # _safe_collect가 에러 처리
     )
-    
+
     collected = {}
     for source_name, data in results:
         collected[source_name] = data
         count = len(data) if isinstance(data, list) else 0
         logger.info(f"  {source_name}: {count}건 수집")
-    
+
     return collected
 
 
@@ -97,8 +98,6 @@ async def _safe_collect(name: str, collector_fn) -> tuple[str, list]:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }])
 
-
-import re as _re
 
 # 유사도 임계값: 이 값 이상이면 동일 사건으로 판정 (낮출수록 보수적)
 SIMILARITY_THRESHOLD = 0.50
@@ -439,20 +438,20 @@ async def run_once():
 
     start = datetime.now(timezone.utc)
     logger.info(f"Kaven v{__version__} 실행 시작: {start.isoformat()}")
-    
+
     # 1. 데이터 수집
     collected = await run_collectors()
-    
+
     # 2. 분석
     logger.info("분석 엔진 실행 중...")
     events = await analyze(collected)
     logger.info(f"분석 완료: {len(events)}건 이벤트 감지")
-    
+
     # 3. 중복 제거 (이미 전송한 이벤트 필터링)
     cache = _load_sent_cache()
     events_to_send = _deduplicate_events(events, cache)
     logger.info(f"중복 제거 후 발송 대상: {len(events_to_send)}건")
-    
+
     # 4. 신호 발송
     if events_to_send:
         logger.info("신호 발송 중...")
@@ -464,7 +463,7 @@ async def run_once():
     else:
         signal_result = {"sent": 0, "logged": 0}
         logger.info("이상 이벤트 없음 또는 전부 중복 — 신호 발송 건너뜀")
-    
+
     # 4. 로그 저장
     end = datetime.now(timezone.utc)
     log_entry = {
@@ -480,31 +479,31 @@ async def run_once():
         "events": events,
         "signal_result": signal_result,
     }
-    
+
     log_file = LOG_DIR / f"kaven_{start.strftime('%Y%m%d')}.jsonl"
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-    
+
     logger.info(f"로그 저장: {log_file}")
 
     # 원격(Convex) 백업 — opt-in (CONVEX_SITE_URL 설정 시에만)
     _upload_remote_if_enabled(log_entry, events, signal_result)
 
     logger.info(f"Kaven 실행 완료: {(end - start).total_seconds():.1f}초 소요")
-    
+
     return log_entry
 
 
 async def run_watch(interval_minutes: int = 5):
     """감시 모드: interval 간격으로 반복 실행."""
     logger.info(f"Kaven 감시 모드 시작 (간격: {interval_minutes}분)")
-    
+
     while True:
         try:
             await run_once()
         except Exception as e:
             logger.error(f"실행 오류: {e}", exc_info=True)
-        
+
         logger.info(f"다음 실행까지 {interval_minutes}분 대기...")
         await asyncio.sleep(interval_minutes * 60)
 
@@ -513,18 +512,18 @@ def main():
     parser = argparse.ArgumentParser(
         description="Kaven Smart System — 지정학 조기경보 + 투자 신호 시스템"
     )
-    
+
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--once", action="store_true", help="1회 실행")
     group.add_argument("--watch", action="store_true", help="5분 간격 감시 모드")
-    
+
     parser.add_argument(
         "--interval", type=int, default=5,
         help="감시 모드 간격 (분, 기본 5)"
     )
-    
+
     args = parser.parse_args()
-    
+
     if args.once:
         asyncio.run(run_once())
     elif args.watch:

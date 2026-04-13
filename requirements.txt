@@ -1,0 +1,4 @@
+# Kaven runtime dependencies
+aiohttp>=3.9
+feedparser>=6.0
+websockets>=12.0

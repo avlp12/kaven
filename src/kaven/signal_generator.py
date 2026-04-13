@@ -8,10 +8,8 @@ severity 5:  사용자님 개인 DM 즉시 알림
 OpenClaw message API 우선 사용, 실패 시 Bot API 직접 호출.
 """
 
-import json
 import logging
 import os
-from datetime import datetime, timezone
 from typing import Any
 
 import aiohttp
@@ -22,7 +20,7 @@ logger = logging.getLogger("kaven.signal")
 
 # 텔레그램 설정
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1003868141703")
-TOPIC_MAVEN = int(os.getenv("TELEGRAM_TOPIC_MAVEN", "5052"))   # Kaven 전용 토픽 
+TOPIC_MAVEN = int(os.getenv("TELEGRAM_TOPIC_MAVEN", "5052"))   # Kaven 전용 토픽
 USER_DM = os.getenv("TELEGRAM_USER_DM", "40130797")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 GATEWAY_URL = os.getenv("OPENCLAW_GATEWAY_URL", "http://localhost:18789")
@@ -58,21 +56,21 @@ SIGNAL_LABEL = {
 async def process_signals(events: list[dict[str, Any]]) -> dict[str, Any]:
     """
     분석된 이벤트 목록을 severity 기반으로 알림 발송.
-    
+
     Returns:
         발송 결과 요약
     """
     if not events:
         logger.info("발송할 이벤트 없음")
         return {"sent": 0, "logged": 0}
-    
+
     sent_count = 0
     logged_count = 0
     errors = []
-    
+
     for event in events:
         severity = event.get("severity", 1)
-        
+
         # 로그 저장 (모든 severity)
         logged_count += 1
         logger.info(
@@ -80,7 +78,7 @@ async def process_signals(events: list[dict[str, Any]]) -> dict[str, Any]:
             f"| {event.get('category', 'other')} "
             f"| {event.get('signal', 'watch')}"
         )
-        
+
         # severity 3+: topic:5052 (Kaven 전용) 알림만
         if severity >= 3:
             try:
@@ -91,7 +89,7 @@ async def process_signals(events: list[dict[str, Any]]) -> dict[str, Any]:
             except Exception as e:
                 logger.error(f"topic:5052 알림 실패: {e}")
                 errors.append(str(e))
-        
+
         # severity 5: 개인 DM (긴급만)
         if severity >= 5:
             try:
@@ -102,7 +100,7 @@ async def process_signals(events: list[dict[str, Any]]) -> dict[str, Any]:
             except Exception as e:
                 logger.error(f"긴급 DM 실패: {e}")
                 errors.append(str(e))
-    
+
     return {
         "sent": sent_count,
         "logged": logged_count,
@@ -117,7 +115,7 @@ def _format_message(event: dict) -> str:
     category = CATEGORY_LABEL.get(event.get("category", "other"), "📌 기타")
     signal = SIGNAL_LABEL.get(event.get("signal", "watch"), "👀 관망")
     confidence = event.get("confidence", 0)
-    
+
     lines = [
         f"{emoji} Kaven v{__version__} 지정학 경보 [Lv.{severity}/5]",
         "",
@@ -125,18 +123,18 @@ def _format_message(event: dict) -> str:
         f"📂 {category}",
         f"📊 {signal} (확신도: {confidence:.0%})",
     ]
-    
+
     assets = event.get("affected_assets", [])
     if assets:
         lines.append(f"💼 영향 자산: {', '.join(assets)}")
-    
+
     reasoning = event.get("reasoning", "")
     if reasoning:
         lines.append(f"\n💡 {reasoning}")
-    
+
     if event.get("fallback"):
         lines.append("\n⚠️ 규칙 기반 분석 (API 폴백)")
-    
+
     return "\n".join(lines)
 
 
@@ -145,22 +143,22 @@ def _format_investment_message(event: dict) -> str:
     severity = event.get("severity", 1)
     emoji = SEVERITY_EMOJI.get(severity, "⚪")
     signal = SIGNAL_LABEL.get(event.get("signal", "watch"), "👀 관망")
-    
+
     lines = [
         f"{emoji} Kaven v{__version__} 투자 신호 [Lv.{severity}/5]",
         "",
         f"🌐 {event.get('event', '')}",
         f"📊 {signal}",
     ]
-    
+
     assets = event.get("affected_assets", [])
     if assets:
         lines.append(f"💼 영향: {', '.join(assets)}")
-    
+
     reasoning = event.get("reasoning", "")
     if reasoning:
         lines.append(f"\n{reasoning}")
-    
+
     return "\n".join(lines)
 
 
@@ -184,7 +182,7 @@ async def _send_telegram(text: str, chat_id: str, thread_id: int):
             return
         except Exception as e:
             logger.warning(f"Bot API 발송 실패: {e}")
-    
+
     # OpenClaw gateway 폴백
     try:
         async with aiohttp.ClientSession() as session:
@@ -204,7 +202,7 @@ async def _send_telegram(text: str, chat_id: str, thread_id: int):
                 logger.warning(f"OpenClaw gateway 발송 실패: {resp.status}")
     except Exception as e:
         logger.warning(f"OpenClaw gateway 연결 실패: {e}")
-    
+
     raise RuntimeError("No telegram delivery method available")
 
 
@@ -216,7 +214,7 @@ async def _send_telegram_bot_api(text: str, chat_id: str, thread_id: int | None 
         "text": text,
         "message_thread_id": thread_id,
     }
-    
+
     async with aiohttp.ClientSession() as session:
         async with session.post(
             url, json=payload,
