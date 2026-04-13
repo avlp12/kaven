@@ -77,6 +77,22 @@
     .back-link { color: var(--accent); cursor: pointer; font-size: 13px; margin-bottom: 12px; display: inline-block; }
     .back-link:hover { text-decoration: underline; }
 
+    /* Portfolio */
+    .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+    .asset-card { transition: border-color 0.2s; }
+    .asset-card:hover { border-color: var(--accent); }
+    .asset-name { font-size: 16px; font-weight: 600; }
+    .asset-type { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #30363d; color: #8b949e; margin-left: 8px; }
+    .signal-badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .signal-buy { background: #3fb95033; color: var(--green); }
+    .signal-sell { background: #f8514933; color: var(--red); }
+    .signal-hedge { background: #d2992233; color: var(--orange); }
+    .signal-hold { background: #58a6ff22; color: var(--accent); }
+    .signal-watch { background: #30363d; color: #8b949e; }
+    .heatmap-row { display: flex; gap: 2px; margin-top: 8px; }
+    .heatmap-cell { flex: 1; height: 24px; border-radius: 3px; position: relative; min-width: 16px; }
+    .heatmap-cell:hover::after { content: attr(data-tip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.9); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 10px; white-space: nowrap; z-index: 10; }
+
     @media (max-width: 600px) {
       nav a { padding: 10px 14px; font-size: 13px; }
       .stats { flex-direction: column; }
@@ -89,6 +105,7 @@
     <a data-page="report">Report</a>
     <a data-page="map">Map</a>
     <a data-page="guide">Guide</a>
+    <a data-page="portfolio">Portfolio</a>
   </nav>
 
   <!-- ============ Dashboard ============ -->
@@ -146,6 +163,16 @@
     </div>
   </div>
 
+  <!-- ============ Portfolio ============ -->
+  <div id="portfolio" class="page">
+    <div class="container">
+      <h1>Portfolio Impact</h1>
+      <p style="color:#8b949e;margin-bottom:16px">지정학 이벤트가 투자 자산에 미치는 영향을 추적합니다. 최근 7일간 이벤트 빈도 + severity 히트맵.</p>
+      <div class="stats" id="portfolioStats"></div>
+      <div class="asset-grid" id="assetGrid"></div>
+    </div>
+  </div>
+
   <script>
     const API = 'http://127.0.0.1:8000';
     const SEV_COLORS = {0:'#30363d',1:'#484f58',2:'#58a6ff',3:'#e3b341',4:'#d29922',5:'#f85149'};
@@ -163,6 +190,7 @@
         if (a.dataset.page === 'report') loadReportDates();
         if (a.dataset.page === 'map') loadMap();
         if (a.dataset.page === 'guide') loadGuide();
+        if (a.dataset.page === 'portfolio') loadPortfolio();
       };
     });
 
@@ -371,6 +399,56 @@ w.onPointClick(p=>w.pointOfView({lat:p.lat,lng:p.lng,altitude:1.2},800));
     }
 
     document.getElementById('guideBackLink').onclick = loadGuide;
+
+    // ── Portfolio ──
+
+    async function loadPortfolio() {
+      try {
+        const res = await fetch(`${API}/portfolio?days=7`);
+        const data = await res.json();
+        const assets = data.assets || [];
+
+        const totalEvents = assets.reduce((s,a) => s + a.total_events, 0);
+        const maxSev = assets.length ? Math.max(...assets.map(a=>a.max_severity)) : 0;
+
+        document.getElementById('portfolioStats').innerHTML = `
+          <div class="stat"><div class="label">Tracked Assets</div><div class="value">${assets.length}</div></div>
+          <div class="stat"><div class="label">Total Mentions</div><div class="value">${totalEvents}</div></div>
+          <div class="stat"><div class="label">Peak Severity</div><div class="value" style="color:${SEV_COLORS[maxSev]}">${SEV_EMOJI[maxSev]} Lv.${maxSev}</div></div>
+        `;
+
+        const signalClass = s => ({buy:'signal-buy',sell:'signal-sell',hedge:'signal-hedge',hold:'signal-hold'}[s]||'signal-watch');
+
+        document.getElementById('assetGrid').innerHTML = assets.map(a => {
+          const heatmap = (a.history||[]).map(h => {
+            const bg = SEV_COLORS[h.max_severity] || SEV_COLORS[0];
+            return `<div class="heatmap-cell" style="background:${bg}" data-tip="${h.date}: Lv.${h.max_severity} (${h.event_count}건)"></div>`;
+          }).join('');
+
+          const signals = Object.entries(a.signals||{}).map(([k,v]) => `${k}:${v}`).join(' ');
+
+          return `
+            <div class="card asset-card">
+              <div class="card-header">
+                <span>
+                  <span class="asset-name">${a.name}</span>
+                  <span class="asset-type">${a.type}</span>
+                </span>
+                <span class="signal-badge ${signalClass(a.dominant_signal)}">${a.dominant_signal}</span>
+              </div>
+              <div style="font-size:12px;color:#8b949e;margin:4px 0">${a.description}</div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin:8px 0">
+                <span>이벤트 ${a.total_events}건</span>
+                <span class="sev sev-${a.max_severity}">Peak Lv.${a.max_severity}</span>
+              </div>
+              <div style="font-size:11px;color:#484f58;margin-bottom:4px">7일 히트맵 (좌=과거 → 우=오늘)</div>
+              <div class="heatmap-row">${heatmap}</div>
+              <div style="font-size:11px;color:#484f58;margin-top:6px">신호 분포: ${signals || 'N/A'}</div>
+            </div>
+          `;
+        }).join('');
+      } catch(e) { console.error(e); }
+    }
   </script>
 </body>
 </html>

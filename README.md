@@ -4,19 +4,23 @@
 
 Kaven은 AIS/ADS-B/뉴스/소셜 데이터를 수집하고, LLM 분석 + dedup 후 텔레그램 알림/로그 저장까지 수행하는 지정학 조기경보 시스템입니다.
 
-현재 버전: **0.0.02**
+현재 버전: **0.0.03**
 
 버전 정책:
 - 모든 업데이트 시 버전을 올리고(`0.0.01`부터 시작), 릴리스 노트/알림 헤더/로그 메타데이터에 동일 버전을 표시합니다.
 
-### 최근 업데이트 (v0.0.02)
-- **이슈 #7 정책 반영** — 원격(Convex) 업로드를 `CONVEX_SITE_URL` 기반 opt-in으로 전환. 미설정 시 외부 전송 완전 비활성화(로컬 로그만 보존).
-- 하드코딩된 엔드포인트 `https://exciting-cod-257.convex.site/addMavenRun` 완전 제거. 대신 `CONVEX_SITE_URL` + `CONVEX_EVENT_PATH`(기본 `/addKavenRun`)를 동적으로 조합.
-- 원격 전송 로직을 `_upload_remote_if_enabled()` 헬퍼로 분리 — 엔드포인트 정규화(trailing/leading slash), 실패 시 예외 전파 방지(로컬 로그 보존 우선).
-- 정책 회귀 방지용 테스트 스위트 `tests/test_kaven_convex_policy.py` 추가(9건). 소스 문자열 정적 검사로 하드코딩 엔드포인트 부재까지 검증하여 upstream sync 회귀 차단.
-- `make test-kaven` 타깃에 convex policy 테스트 포함.
-- `.gitignore` 신규 추가(`__pycache__/`, `.env`, `.port_sessions/` 등 커버).
-- User-Agent 헤더 및 텔레그램 경보 헤더/긴급 경보에 새 버전(`v0.0.02`) 표시.
+### 최근 업데이트 (v0.0.03)
+- **일일 분석 리포트 자동 생성** (`/report`) — JSONL 로그에서 지역별/카테고리별/자산별 집계 + 마크다운 브리핑을 자동 생성. LLM 없이 규칙 기반으로 동작하므로 API 키 불필요. `GET /report`, `GET /report/{YYYYMMDD}`, `GET /report/dates` 엔드포인트 추가.
+- **인터랙티브 분쟁 지도** (`/map`) — globe.gl 3D 지구본에 실시간 이벤트 데이터를 severity별 색상 마커로 표시. 기존 하드코딩 시각화를 `GET /map/data` API 기반으로 교체. 클릭 줌, 자동 회전 지원.
+- **지역별 분쟁 현황 가이드** (`/guide`) — 9개 감시구역(호르무즈, 대만, 한반도 등)의 현재 severity + 설명 + 7일 히스토리 차트. `GET /guide`, `GET /guide/{region}?days=7` 엔드포인트 추가.
+- **프론트엔드 전면 리뉴얼** — 단일 테이블 → 탭 기반 다크 테마 SPA (Dashboard / Report / Map / Guide). Severity 뱃지, 통계 카드, 반응형 레이아웃.
+- `report_generator.py` 모듈 신규 추가 + 테스트 6건 (`tests/test_report_generator.py`).
+
+### 이전 업데이트 (v0.0.02)
+- 이슈 #7 정책 반영: Convex 원격 업로드를 `CONVEX_SITE_URL` 기반 opt-in으로 전환.
+- 하드코딩 엔드포인트 제거, `CONVEX_EVENT_PATH` 환경변수 지원.
+- 정책 회귀 테스트 `tests/test_kaven_convex_policy.py` 9건 추가.
+- `.gitignore` 신규 추가.
 
 ### 이전 업데이트 (v0.0.01)
 - 사용자 알림 문구의 `Maven` 표기를 `Kaven`으로 통일했습니다.
