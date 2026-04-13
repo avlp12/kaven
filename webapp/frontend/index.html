@@ -5,173 +5,372 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kaven Dashboard</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; }
-    .row { margin-bottom: 10px; }
-    label { margin-right: 12px; }
-    input, select { margin-right: 8px; }
-    button { margin-right: 8px; }
-    pre { background: #111; color: #0f0; padding: 12px; border-radius: 8px; overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-    th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
-    th { background: #f4f4f4; }
-    .pill { padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #eee; }
+    :root { --bg: #0d1117; --card: #161b22; --border: #30363d; --text: #c9d1d9; --accent: #58a6ff; --red: #f85149; --orange: #d29922; --green: #3fb950; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
+
+    /* Navigation tabs */
+    nav { display: flex; border-bottom: 1px solid var(--border); background: var(--card); position: sticky; top: 0; z-index: 100; }
+    nav a { padding: 12px 24px; color: var(--text); text-decoration: none; border-bottom: 2px solid transparent; font-size: 14px; font-weight: 500; cursor: pointer; }
+    nav a.active { color: var(--accent); border-bottom-color: var(--accent); }
+    nav a:hover { color: #fff; }
+
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .page { display: none; }
+    .page.active { display: block; }
+    h1 { font-size: 24px; margin-bottom: 16px; }
+    h2 { font-size: 18px; margin: 20px 0 12px; color: var(--accent); }
+    h3 { font-size: 15px; margin: 16px 0 8px; }
+
+    /* Cards */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+
+    /* Severity badges */
+    .sev { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .sev-5 { background: #f8514933; color: var(--red); }
+    .sev-4 { background: #d2992233; color: var(--orange); }
+    .sev-3 { background: #d2992233; color: #e3b341; }
+    .sev-2 { background: #58a6ff22; color: var(--accent); }
+    .sev-1 { background: #30363d; color: #8b949e; }
+    .sev-0 { background: #30363d; color: #484f58; }
+
+    /* Stats row */
+    .stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .stat { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; min-width: 140px; flex: 1; }
+    .stat .label { font-size: 11px; color: #8b949e; text-transform: uppercase; }
+    .stat .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }
+    th { color: #8b949e; font-weight: 500; font-size: 11px; text-transform: uppercase; }
+
+    /* Report markdown */
+    .markdown { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; line-height: 1.8; white-space: pre-wrap; font-size: 14px; }
+
+    /* Region cards grid */
+    .region-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+    .region-card { cursor: pointer; transition: border-color 0.2s; }
+    .region-card:hover { border-color: var(--accent); }
+    .region-name { font-size: 16px; font-weight: 600; }
+    .region-desc { font-size: 12px; color: #8b949e; margin-top: 4px; }
+    .region-detail { display: none; }
+    .region-detail.active { display: block; }
+
+    /* History chart (simple bar) */
+    .history-bar { display: flex; align-items: flex-end; gap: 4px; height: 60px; margin: 12px 0; }
+    .history-bar .bar { flex: 1; border-radius: 3px 3px 0 0; min-width: 20px; transition: height 0.3s; }
+    .history-bar .bar-label { font-size: 10px; color: #8b949e; text-align: center; margin-top: 4px; }
+    .history-dates { display: flex; gap: 4px; }
+    .history-dates span { flex: 1; font-size: 10px; color: #484f58; text-align: center; }
+
+    /* Controls */
+    .controls { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .controls select, .controls input { background: var(--card); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+    .controls button { background: var(--accent); color: #fff; border: none; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .controls button:hover { opacity: 0.9; }
+
+    /* Globe iframe */
+    #mapFrame { width: 100%; height: 80vh; border: 1px solid var(--border); border-radius: 8px; background: #000; }
+
+    .back-link { color: var(--accent); cursor: pointer; font-size: 13px; margin-bottom: 12px; display: inline-block; }
+    .back-link:hover { text-decoration: underline; }
+
+    @media (max-width: 600px) {
+      nav a { padding: 10px 14px; font-size: 13px; }
+      .stats { flex-direction: column; }
+    }
   </style>
 </head>
 <body>
-  <h1>Kaven Dashboard</h1>
+  <nav>
+    <a class="active" data-page="dashboard">Dashboard</a>
+    <a data-page="report">Report</a>
+    <a data-page="map">Map</a>
+    <a data-page="guide">Guide</a>
+  </nav>
 
-  <div class="row">
-    <button id="runOnceBtn">Run Once</button>
-    <button id="refreshBtn">Refresh</button>
-    <span id="status" class="pill">idle</span>
+  <!-- ============ Dashboard ============ -->
+  <div id="dashboard" class="page active">
+    <div class="container">
+      <h1>Kaven Dashboard</h1>
+      <div class="controls">
+        <button id="runOnceBtn">Run Once</button>
+        <button id="refreshBtn">Refresh</button>
+        <select id="severityMin"><option value="">Severity: All</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5</option></select>
+        <select id="category"><option value="">Category: All</option><option value="energy">energy</option><option value="semiconductor">semiconductor</option><option value="currency">currency</option><option value="conflict">conflict</option><option value="other">other</option></select>
+        <input id="query" type="text" placeholder="keyword..." />
+      </div>
+      <div class="stats" id="dashStats"></div>
+      <table>
+        <thead><tr><th>Time</th><th>Sev</th><th>Category</th><th>Region</th><th>Event</th><th>Signal</th></tr></thead>
+        <tbody id="eventsBody"></tbody>
+      </table>
+    </div>
   </div>
 
-  <div class="row">
-    <label>Min Severity
-      <select id="severityMin">
-        <option value="">All</option>
-        <option value="1">1+</option>
-        <option value="2">2+</option>
-        <option value="3">3+</option>
-        <option value="4">4+</option>
-        <option value="5">5</option>
-      </select>
-    </label>
-
-    <label>Category
-      <select id="category">
-        <option value="">All</option>
-        <option value="energy">energy</option>
-        <option value="semiconductor">semiconductor</option>
-        <option value="currency">currency</option>
-        <option value="conflict">conflict</option>
-        <option value="other">other</option>
-      </select>
-    </label>
-
-    <label>Keyword
-      <input id="query" type="text" placeholder="이벤트 키워드" />
-    </label>
+  <!-- ============ Report ============ -->
+  <div id="report" class="page">
+    <div class="container">
+      <h1>Daily Report</h1>
+      <div class="controls">
+        <select id="reportDate"></select>
+        <button id="loadReportBtn">Load</button>
+      </div>
+      <div class="stats" id="reportStats"></div>
+      <div class="markdown" id="reportMarkdown">Loading...</div>
+    </div>
   </div>
 
-  <div class="row">
-    <label><input id="autoPolling" type="checkbox" checked /> Auto Polling (10s)</label>
-    <label><input id="useSse" type="checkbox" checked /> SSE 실시간 업데이트</label>
+  <!-- ============ Map ============ -->
+  <div id="map" class="page">
+    <div class="container">
+      <h1>Global Conflict Map</h1>
+      <div id="mapContainer"></div>
+    </div>
   </div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>run_id</th>
-        <th>started_at</th>
-        <th>severity</th>
-        <th>category</th>
-        <th>event</th>
-      </tr>
-    </thead>
-    <tbody id="eventsBody"></tbody>
-  </table>
-
-  <h3>Latest payload</h3>
-  <pre id="output">Ready</pre>
+  <!-- ============ Guide ============ -->
+  <div id="guide" class="page">
+    <div class="container">
+      <div id="guideOverview">
+        <h1>Region Guide</h1>
+        <div class="stats" id="guideStats"></div>
+        <div class="region-grid" id="regionGrid"></div>
+      </div>
+      <div id="guideDetail" class="region-detail">
+        <span class="back-link" id="guideBackLink">&larr; Back to overview</span>
+        <div id="guideDetailContent"></div>
+      </div>
+    </div>
+  </div>
 
   <script>
-    const api = 'http://127.0.0.1:8000';
-    const out = document.getElementById('output');
-    const eventsBody = document.getElementById('eventsBody');
-    const status = document.getElementById('status');
+    const API = 'http://127.0.0.1:8000';
+    const SEV_COLORS = {0:'#30363d',1:'#484f58',2:'#58a6ff',3:'#e3b341',4:'#d29922',5:'#f85149'};
+    const SEV_EMOJI = {0:'',1:'⚪',2:'🔵',3:'🟡',4:'🟠',5:'🔴'};
 
-    let pollTimer = null;
-    let sse = null;
+    // ── Navigation ──
 
-    function currentFilters() {
-      const severityMin = document.getElementById('severityMin').value;
-      const category = document.getElementById('category').value;
-      const q = document.getElementById('query').value.trim();
-      const params = new URLSearchParams({ limit: '20' });
-      if (severityMin) params.set('severity_min', severityMin);
-      if (category) params.set('category', category);
-      if (q) params.set('q', q);
-      return params;
-    }
+    document.querySelectorAll('nav a').forEach(a => {
+      a.onclick = () => {
+        document.querySelectorAll('nav a').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
+        a.classList.add('active');
+        const page = document.getElementById(a.dataset.page);
+        page.classList.add('active');
+        if (a.dataset.page === 'report') loadReportDates();
+        if (a.dataset.page === 'map') loadMap();
+        if (a.dataset.page === 'guide') loadGuide();
+      };
+    });
 
-    function setStatus(text) {
-      status.textContent = text;
-    }
-
-    function renderRuns(data) {
-      const runs = data.runs || [];
-      const rows = [];
-      for (const run of runs) {
-        for (const event of (run.events || [])) {
-          rows.push(`
-            <tr>
-              <td>${run.run_id || ''}</td>
-              <td>${run.started_at || ''}</td>
-              <td>${event.severity ?? ''}</td>
-              <td>${event.category || ''}</td>
-              <td>${event.event || ''}</td>
-            </tr>
-          `);
-        }
-      }
-      eventsBody.innerHTML = rows.join('');
-      out.textContent = JSON.stringify(data, null, 2);
-      setStatus(`runs=${runs.length}`);
-    }
+    // ── Dashboard ──
 
     async function fetchRuns() {
-      const qs = currentFilters().toString();
-      const res = await fetch(`${api}/runs?${qs}`);
-      const data = await res.json();
-      renderRuns(data);
+      const p = new URLSearchParams({limit:'30'});
+      const sev = document.getElementById('severityMin').value;
+      const cat = document.getElementById('category').value;
+      const q = document.getElementById('query').value.trim();
+      if (sev) p.set('severity_min', sev);
+      if (cat) p.set('category', cat);
+      if (q) p.set('q', q);
+      try {
+        const res = await fetch(`${API}/runs?${p}`);
+        const data = await res.json();
+        renderDashboard(data);
+      } catch (e) { console.error(e); }
     }
 
-    async function runOnce() {
-      setStatus('running...');
-      const res = await fetch(`${api}/runs/once`, { method: 'POST' });
-      const data = await res.json();
-      out.textContent = JSON.stringify(data, null, 2);
-      await fetchRuns();
-    }
+    function renderDashboard(data) {
+      const runs = data.runs || [];
+      let allEvents = [];
+      runs.forEach(r => (r.events||[]).forEach(e => { e._run = r; allEvents.push(e); }));
 
-    function setupPolling() {
-      if (pollTimer) clearInterval(pollTimer);
-      if (document.getElementById('autoPolling').checked) {
-        pollTimer = setInterval(fetchRuns, 10000);
-      }
-    }
+      const maxSev = allEvents.length ? Math.max(...allEvents.map(e=>e.severity||0)) : 0;
+      const cats = {};
+      allEvents.forEach(e => { cats[e.category||'other'] = (cats[e.category||'other']||0)+1; });
 
-    function setupSse() {
-      if (sse) {
-        sse.close();
-        sse = null;
-      }
-      if (!document.getElementById('useSse').checked) return;
+      document.getElementById('dashStats').innerHTML = `
+        <div class="stat"><div class="label">Risk Level</div><div class="value" style="color:${SEV_COLORS[maxSev]}">${SEV_EMOJI[maxSev]} Lv.${maxSev}</div></div>
+        <div class="stat"><div class="label">Events</div><div class="value">${allEvents.length}</div></div>
+        <div class="stat"><div class="label">Runs</div><div class="value">${runs.length}</div></div>
+      `;
 
-      sse = new EventSource(`${api}/runs/stream`);
-      sse.onmessage = (msg) => {
-        try {
-          const payload = JSON.parse(msg.data);
-          if (payload.type === 'run_update') {
-            fetchRuns();
-          }
-        } catch (_) {}
-      };
-      sse.onerror = () => setStatus('sse reconnecting...');
+      const rows = allEvents.slice(0,50).map(e => `<tr>
+        <td>${(e._run.started_at||'').slice(11,16)}</td>
+        <td><span class="sev sev-${e.severity||0}">${e.severity||0}</span></td>
+        <td>${e.category||''}</td>
+        <td>${e.region||''}</td>
+        <td>${e.event||''}</td>
+        <td>${e.signal||''}</td>
+      </tr>`);
+      document.getElementById('eventsBody').innerHTML = rows.join('');
     }
 
     document.getElementById('refreshBtn').onclick = fetchRuns;
-    document.getElementById('runOnceBtn').onclick = runOnce;
-    document.getElementById('severityMin').onchange = fetchRuns;
-    document.getElementById('category').onchange = fetchRuns;
-    document.getElementById('query').onchange = fetchRuns;
-    document.getElementById('autoPolling').onchange = setupPolling;
-    document.getElementById('useSse').onchange = setupSse;
-
+    document.getElementById('runOnceBtn').onclick = async () => {
+      await fetch(`${API}/runs/once`,{method:'POST'});
+      fetchRuns();
+    };
+    ['severityMin','category','query'].forEach(id =>
+      document.getElementById(id).addEventListener('change', fetchRuns));
     fetchRuns();
-    setupPolling();
-    setupSse();
+
+    // ── Report ──
+
+    async function loadReportDates() {
+      try {
+        const res = await fetch(`${API}/report/dates`);
+        const data = await res.json();
+        const sel = document.getElementById('reportDate');
+        sel.innerHTML = (data.dates||[]).map(d => `<option value="${d}">${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}</option>`).join('');
+        if (data.dates && data.dates.length) loadReport(data.dates[0]);
+      } catch(e) { console.error(e); }
+    }
+
+    async function loadReport(date) {
+      try {
+        const res = await fetch(`${API}/report/${date}`);
+        if (!res.ok) { document.getElementById('reportMarkdown').textContent = 'No data for this date.'; return; }
+        const data = await res.json();
+
+        document.getElementById('reportStats').innerHTML = `
+          <div class="stat"><div class="label">Date</div><div class="value">${data.date}</div></div>
+          <div class="stat"><div class="label">Risk Level</div><div class="value" style="color:${SEV_COLORS[data.max_severity]}">${SEV_EMOJI[data.max_severity]} Lv.${data.max_severity}</div></div>
+          <div class="stat"><div class="label">Unique Events</div><div class="value">${data.unique_events}</div></div>
+          <div class="stat"><div class="label">Total Runs</div><div class="value">${data.total_runs}</div></div>
+        `;
+        document.getElementById('reportMarkdown').textContent = data.markdown;
+      } catch(e) { document.getElementById('reportMarkdown').textContent = 'Error loading report.'; }
+    }
+
+    document.getElementById('loadReportBtn').onclick = () => {
+      const d = document.getElementById('reportDate').value;
+      if (d) loadReport(d);
+    };
+
+    // ── Map ──
+
+    let mapLoaded = false;
+    async function loadMap() {
+      if (mapLoaded) return;
+      mapLoaded = true;
+      const container = document.getElementById('mapContainer');
+      try {
+        const res = await fetch(`${API}/map/data`);
+        const data = await res.json();
+        // Build a self-contained globe HTML with live data
+        const points = JSON.stringify(data.points || []);
+        const iframe = document.createElement('iframe');
+        iframe.id = 'mapFrame';
+        iframe.srcdoc = buildGlobeHtml(points);
+        container.innerHTML = '';
+        container.appendChild(iframe);
+      } catch(e) {
+        container.innerHTML = '<div class="card">Map API unavailable. Start the backend server first.</div>';
+      }
+    }
+
+    function buildGlobeHtml(pointsJson) {
+      return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>body{margin:0;background:#000;overflow:hidden}
+#info{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.85);color:#fff;padding:15px;border-radius:8px;max-width:350px;font-size:13px;font-family:sans-serif;z-index:10}
+#info h3{margin:0 0 8px;color:#58a6ff}
+.ev{background:rgba(255,255,255,.08);padding:6px 8px;margin:4px 0;border-radius:4px;border-left:3px solid #888}
+.ev.s5{border-color:#f85149}.ev.s4{border-color:#d29922}.ev.s3{border-color:#e3b341}.ev.s2{border-color:#58a6ff}
+</style></head><body>
+<div id="globe"></div>
+<div id="info"><h3>Kaven Conflict Map</h3><div id="events"></div></div>
+<script src="https://unpkg.com/d3@7/dist/d3.min.js"><\/script>
+<script src="https://unpkg.com/globe.gl@2/dist/globe.gl.min.js"><\/script>
+<script>
+const pts=${pointsJson};
+const sevCol={5:'#f85149',4:'#d29922',3:'#e3b341',2:'#58a6ff',1:'#484f58'};
+const evDiv=document.getElementById('events');
+pts.forEach(p=>{const d=document.createElement('div');d.className='ev s'+p.severity;d.innerHTML='<b>'+p.name+'</b> [Lv.'+p.severity+']<br><span style="font-size:11px;color:#aaa">'+p.event+'</span>';evDiv.appendChild(d);});
+if(pts.length===0) evDiv.innerHTML='<div style="color:#8b949e">No events today</div>';
+const w=Globe()(document.getElementById('globe'))
+  .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+  .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
+  .pointsData(pts).pointLat('lat').pointLng('lng')
+  .pointColor(d=>sevCol[d.severity]||'#888')
+  .pointAltitude(d=>0.02+d.severity*0.02)
+  .pointRadius(d=>0.3+d.severity*0.15)
+  .pointLabel(d=>'<div style="background:rgba(0,0,0,.9);color:#fff;padding:8px;border-radius:4px;font-size:12px"><b>'+d.name+'</b><br>'+d.event+'<br><span style="color:#aaa">Severity: '+d.severity+'</span></div>');
+w.controls().autoRotate=true;w.controls().autoRotateSpeed=0.3;
+w.pointOfView({lat:35,lng:90,altitude:2.2},1000);
+w.onPointClick(p=>w.pointOfView({lat:p.lat,lng:p.lng,altitude:1.2},800));
+<\/script></body></html>`;
+    }
+
+    // ── Guide ──
+
+    async function loadGuide() {
+      const overview = document.getElementById('guideOverview');
+      const detail = document.getElementById('guideDetail');
+      overview.style.display = 'block';
+      detail.classList.remove('active');
+
+      try {
+        const res = await fetch(`${API}/guide`);
+        const data = await res.json();
+
+        document.getElementById('guideStats').innerHTML = `
+          <div class="stat"><div class="label">Date</div><div class="value">${data.date}</div></div>
+          <div class="stat"><div class="label">Global Risk</div><div class="value" style="color:${SEV_COLORS[data.max_severity]}">${SEV_EMOJI[data.max_severity]} Lv.${data.max_severity}</div></div>
+        `;
+
+        const grid = document.getElementById('regionGrid');
+        grid.innerHTML = data.regions.map(r => `
+          <div class="card region-card" data-region="${r.code}">
+            <div class="card-header">
+              <span class="region-name">${r.name}</span>
+              <span class="sev sev-${r.current_severity}">Lv.${r.current_severity}</span>
+            </div>
+            <div class="region-desc">${r.description}</div>
+            <div style="margin-top:8px;font-size:12px;color:#8b949e">Events today: ${r.event_count}</div>
+          </div>
+        `).join('');
+
+        grid.querySelectorAll('.region-card').forEach(card => {
+          card.onclick = () => loadRegionDetail(card.dataset.region);
+        });
+      } catch(e) { console.error(e); }
+    }
+
+    async function loadRegionDetail(region) {
+      document.getElementById('guideOverview').style.display = 'none';
+      const detail = document.getElementById('guideDetail');
+      detail.classList.add('active');
+
+      try {
+        const res = await fetch(`${API}/guide/${region}?days=7`);
+        const data = await res.json();
+
+        const historyBars = data.history.map(h => {
+          const height = h.max_severity ? (h.max_severity * 12) : 2;
+          const color = SEV_COLORS[h.max_severity] || SEV_COLORS[0];
+          return `<div style="flex:1;text-align:center"><div style="background:${color};height:${height}px;border-radius:3px 3px 0 0;margin:0 auto;width:80%"></div><div style="font-size:10px;color:#484f58;margin-top:4px">${h.date.slice(5)}</div></div>`;
+        }).join('');
+
+        const events = (data.today_events||[]).map(e =>
+          `<div class="card"><span class="sev sev-${e.severity}">Lv.${e.severity}</span> ${e.event}</div>`
+        ).join('') || '<div style="color:#8b949e">No events today</div>';
+
+        document.getElementById('guideDetailContent').innerHTML = `
+          <h1>${data.name} <span class="sev sev-${data.current_severity}">Lv.${data.current_severity}</span></h1>
+          <p style="color:#8b949e;margin:8px 0">${data.description}</p>
+          <h2>7-Day Severity History</h2>
+          <div style="display:flex;align-items:flex-end;height:80px;gap:4px;margin:12px 0">${historyBars}</div>
+          <h2>Today's Events</h2>
+          ${events}
+        `;
+      } catch(e) { console.error(e); }
+    }
+
+    document.getElementById('guideBackLink').onclick = loadGuide;
   </script>
 </body>
 </html>

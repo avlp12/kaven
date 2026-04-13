@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from src.kaven.kaven import LOG_DIR, run_once
+from src.kaven.report_generator import generate_daily_report
 from src.kaven.version import __version__
 
 app = FastAPI(title="Kaven Web API", version=__version__)
@@ -137,3 +138,168 @@ async def _stream_latest_run() -> AsyncIterator[str]:
 @app.get("/runs/stream")
 async def stream_runs() -> StreamingResponse:
     return StreamingResponse(_stream_latest_run(), media_type="text/event-stream")
+
+
+# ── Daily Report ────────────────────────────────────────────────
+
+
+@app.get("/report")
+def daily_report_today() -> dict[str, Any]:
+    """오늘의 일일 리포트 반환."""
+    return generate_daily_report(LOG_DIR)
+
+
+@app.get("/report/{date}")
+def daily_report_by_date(date: str) -> dict[str, Any]:
+    """특정 날짜(YYYYMMDD)의 일일 리포트 반환."""
+    if len(date) != 8 or not date.isdigit():
+        raise HTTPException(status_code=400, detail="Date must be YYYYMMDD format")
+    report = generate_daily_report(LOG_DIR, date)
+    if report["total_events"] == 0:
+        raise HTTPException(status_code=404, detail=f"No events found for {date}")
+    return report
+
+
+@app.get("/report/dates")
+def list_report_dates() -> dict[str, list[str]]:
+    """리포트 가능한 날짜 목록 반환."""
+    dates = set()
+    for p in Path(LOG_DIR).glob("kaven_*.jsonl"):
+        dates.add(p.stem.replace("kaven_", ""))
+    for p in Path(LOG_DIR).glob("maven_*.jsonl"):
+        dates.add(p.stem.replace("maven_", ""))
+    return {"dates": sorted(dates, reverse=True)}
+
+
+# ── Region Guide ────────────────────────────────────────────────
+
+
+_REGION_COORDS = {
+    "hormuz": {"lat": 26.5, "lng": 56.3, "name": "호르무즈 해협",
+               "description": "세계 원유 해상 운송의 약 20%가 통과하는 전략적 요충지. 한국 원유 수입의 70%가 이 해역을 경유."},
+    "taiwan": {"lat": 23.7, "lng": 121.0, "name": "대만 해협",
+               "description": "글로벌 반도체 공급망의 핵심 지역. 대만 TSMC는 세계 파운드리의 60% 점유."},
+    "korea": {"lat": 37.5, "lng": 127.0, "name": "한반도",
+              "description": "KOSPI, 원/달러 환율에 직접적 영향을 미치는 최고 우선순위 감시 지역."},
+    "ukraine": {"lat": 48.4, "lng": 31.2, "name": "우크라이나",
+                "description": "유럽 에너지·곡물 공급에 영향. 러시아-우크라이나 분쟁 장기화."},
+    "india_pak": {"lat": 30.0, "lng": 70.0, "name": "인도·파키스탄",
+                  "description": "남아시아 핵 보유국 간 긴장. 에너지·무역 경로 교란 가능성."},
+    "southcn": {"lat": 14.0, "lng": 114.0, "name": "남중국해",
+                "description": "세계 해상 무역의 30%가 통과. 미중 해양 패권 경쟁의 핵심 지역."},
+    "redsa": {"lat": 14.0, "lng": 42.0, "name": "홍해·예멘",
+              "description": "수에즈 운하 접근 해역. 후티 반군의 선박 공격으로 국제 물류 차질."},
+    "sahel": {"lat": 15.0, "lng": 0.0, "name": "사헬",
+              "description": "서아프리카 지정학 불안정 지역. 에너지·광물 공급망 영향."},
+    "global": {"lat": 0, "lng": 0, "name": "전지구",
+               "description": "특정 지역에 국한되지 않는 글로벌 이벤트."},
+}
+
+
+def _region_history(log_dir: Path, region: str, days: int = 7) -> list[dict]:
+    """최근 N일간 특정 지역의 severity 히스토리."""
+    from datetime import timedelta
+    history = []
+    today = datetime.now(timezone.utc)
+    for d in range(days):
+        dt = today - timedelta(days=d)
+        date_str = dt.strftime("%Y%m%d")
+        display = dt.strftime("%Y-%m-%d")
+        events = []
+        for prefix in ("kaven_", "maven_"):
+            path = log_dir / f"{prefix}{date_str}.jsonl"
+            if not path.exists():
+                continue
+            with path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        run = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    for ev in run.get("events", []):
+                        if ev.get("region") == region:
+                            events.append(ev)
+        max_sev = max((e.get("severity", 0) for e in events), default=0)
+        history.append({
+            "date": display,
+            "max_severity": max_sev,
+            "event_count": len(events),
+        })
+    history.reverse()
+    return history
+
+
+@app.get("/guide")
+def guide_overview() -> dict[str, Any]:
+    """모든 감시 지역의 현재 상태 요약."""
+    report = generate_daily_report(LOG_DIR)
+    regions = []
+    for code, info in _REGION_COORDS.items():
+        region_data = report.get("by_region", {}).get(code, {})
+        regions.append({
+            "code": code,
+            "name": info["name"],
+            "lat": info["lat"],
+            "lng": info["lng"],
+            "description": info["description"],
+            "current_severity": region_data.get("max_severity", 0),
+            "event_count": region_data.get("event_count", 0),
+        })
+    regions.sort(key=lambda x: -x["current_severity"])
+    return {
+        "date": report["date"],
+        "max_severity": report["max_severity"],
+        "regions": regions,
+    }
+
+
+@app.get("/guide/{region}")
+def guide_region(region: str, days: int = 7) -> dict[str, Any]:
+    """특정 지역의 상세 현황 + 히스토리."""
+    if region not in _REGION_COORDS:
+        raise HTTPException(status_code=404, detail=f"Unknown region: {region}")
+    info = _REGION_COORDS[region]
+    history = _region_history(LOG_DIR, region, days)
+
+    # 오늘의 이벤트
+    report = generate_daily_report(LOG_DIR)
+    region_data = report.get("by_region", {}).get(region, {})
+    events = region_data.get("events", [])
+
+    return {
+        "code": region,
+        "name": info["name"],
+        "lat": info["lat"],
+        "lng": info["lng"],
+        "description": info["description"],
+        "current_severity": region_data.get("max_severity", 0),
+        "today_events": events,
+        "history": history,
+    }
+
+
+# ── Map Data ────────────────────────────────────────────────────
+
+
+@app.get("/map/data")
+def map_data() -> dict[str, Any]:
+    """지도 시각화용 데이터 — 지역별 최신 이벤트 + 좌표."""
+    report = generate_daily_report(LOG_DIR)
+    points = []
+    for code, info in _REGION_COORDS.items():
+        region_data = report.get("by_region", {}).get(code, {})
+        if not region_data.get("events"):
+            continue
+        top_event = max(region_data["events"], key=lambda e: e.get("severity", 0))
+        points.append({
+            "region": code,
+            "lat": info["lat"],
+            "lng": info["lng"],
+            "name": info["name"],
+            "severity": top_event.get("severity", 0),
+            "event": top_event.get("event", ""),
+        })
+    return {"date": report["date"], "points": points}
