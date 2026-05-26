@@ -4,6 +4,38 @@
 
 ---
 
+## v0.0.05 — 2026-05-26
+
+### 핵심: 입력기준 중복제거(input-gating)로 알림 노이즈 제거
+운영 중 동일 사건이 표현만 바뀌어 5분마다 반복 발송되던 문제를 근본 수정.
+
+1. **LLM 호출 게이팅** (`kaven.py`)
+   - `_trigger_signatures()` / `_new_trigger_signatures()` / `_record_seen_inputs()` 신규
+   - 새 자극(신규 뉴스 URL, anomaly 있는 AIS/ADS-B)이 없으면 **LLM 분석·발송을 통째로 스킵**
+   - 자극 시그니처: 뉴스=url(없으면 title), AIS/ADS-B=`zone+anomaly+규모버킷(10단위)`
+   - 군용기/선박 수가 버킷을 넘는 유의미한 변화는 재트리거 → 상황 악화는 놓치지 않음
+   - `sent_cache.json`에 `seen_inputs` 기록, 발송이 없어도 보존
+2. **source_url 전파** (`analyzer.py`)
+   - `_summarize_data()`가 LLM 입력에 뉴스 `url` 포함 → 출력 `source_url`이 채워짐
+   - URL 기반 출력단 dedup이 동반 복구
+3. **fingerprint 정밀화** (`kaven.py` `_content_fingerprint`)
+   - 키에 `region` 추가 → URL 없는 서로 다른 severity 5 사건이 한 지문으로 뭉개지던 문제 해소
+
+### 저장소 위생
+- 과거 커밋되어 박제돼 있던 운영 데이터 추적 해제: `logs/maven_*.jsonl` 20건 + `sent_cache.json`
+  - `.gitignore`에는 이미 등록돼 있었으나 규칙 추가 이전 커밋분이 계속 추적되던 상태
+  - **`sent_cache.json`이 항상 dirty로 잡혀 `upstream-sync.sh`의 자동 동기화를 중단시키던 원인 제거**
+
+### 그간 반영분 정리 (v0.0.04 이후, 릴리스 노트 미기록분)
+- 분석 엔진: claude -p CLI → OpenAI 호환 로컬 LLM(MLX)로 전환
+- OpenSky: Basic Auth 폐지 대응 OAuth2 client_credentials로 복원
+- 주간 upstream 자동 동기화 스크립트 + LaunchAgent 추가
+
+### 테스트
+- 기존 dedup/replay 테스트 통과, 입력 게이팅 스모크 검증 완료
+
+---
+
 ## v0.0.04 — 2026-04-13
 
 ### 주요 변경사항 (설정 파일화 + Codex 리뷰 반영)

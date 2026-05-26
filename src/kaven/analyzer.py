@@ -222,6 +222,9 @@ def _summarize_data(collected_data: dict[str, Any]) -> str:
             parts.append(
                 f"- [{item.get('feed', 'unknown')}] {item.get('title', 'no title')}"
             )
+            url = item.get("url")
+            if url:
+                parts.append(f"  url: {url}")
             if item.get("summary"):
                 parts.append(f"  요약: {item['summary'][:200]}")
 
