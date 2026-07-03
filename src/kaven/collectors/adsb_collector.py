@@ -48,19 +48,38 @@ MILITARY_HEX_PREFIXES = {
 OPENSKY_API_BASE = "https://opensky-network.org/api"
 
 
+async def _get_opensky_bearer_token(session: aiohttp.ClientSession) -> str | None:
+    """OpenSky OAuth2 client_credentials로 Bearer token 발급."""
+    client_id = os.getenv("OPENSKY_CLIENT_ID", "").strip()
+    client_secret = os.getenv("OPENSKY_CLIENT_SECRET", "").strip()
+    if not client_id or not client_secret:
+        return None
+
+    token_url = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
+    data = {
+        "grant_type": "client_credentials",
+        "client_id": client_id,
+        "client_secret": client_secret,
+    }
+    try:
+        async with session.post(token_url, data=data, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            if resp.status == 200:
+                token_data = await resp.json()
+                logger.info("OpenSky Bearer token 발급 완료")
+                return token_data.get("access_token")
+            else:
+                body = await resp.text()
+                logger.warning(f"OpenSky 토큰 발급 실패 {resp.status}: {body[:200]}")
+    except Exception as e:
+        logger.warning(f"OpenSky 토큰 발급 오류: {e}")
+    return None
+
+
 async def collect() -> list[dict[str, Any]]:
     """
     OpenSky Network API로 감시 공역의 항공기 데이터 수집 및 분석.
+    OAuth2 client_credentials 인증 (Basic Auth 폐지됨).
     """
-    username = os.getenv("OPENSKY_USERNAME", "").strip()
-    password = os.getenv("OPENSKY_PASSWORD", "").strip()
-
-    auth = None
-    if username and password:
-        auth = aiohttp.BasicAuth(username, password)
-    else:
-        logger.info("OpenSky 인증 정보 미설정 — 비인증 모드 (rate limit 제한)")
-
     results = []
     watch_airspaces = _watch_airspaces()
     if not watch_airspaces:
@@ -68,12 +87,20 @@ async def collect() -> list[dict[str, Any]]:
         return []
 
     async with aiohttp.ClientSession() as session:
+        # OAuth2 Bearer token 발급
+        bearer_token = await _get_opensky_bearer_token(session)
+        headers = {}
+        if bearer_token:
+            headers["Authorization"] = f"Bearer {bearer_token}"
+        else:
+            logger.info("OpenSky 인증 정보 미설정 — 비인증 모드 (rate limit 제한)")
+
         for zone_key, zone_def in watch_airspaces.items():
             try:
-                zone_result = await _collect_zone(session, auth, zone_key, zone_def)
+                zone_result = await _collect_zone(session, headers, zone_key, zone_def)
                 results.append(zone_result)
                 # rate limit 준수 (비인증: 10초, 인증: 5초)
-                await asyncio.sleep(5 if auth else 10)
+                await asyncio.sleep(5 if bearer_token else 10)
             except Exception as e:
                 logger.error(f"ADS-B {zone_def['name']} 수집 실패: {e}")
                 results.append({
@@ -90,7 +117,7 @@ async def collect() -> list[dict[str, Any]]:
 
 async def _collect_zone(
     session: aiohttp.ClientSession,
-    auth: aiohttp.BasicAuth | None,
+    headers: dict[str, str],
     zone_key: str,
     zone_def: dict,
 ) -> dict[str, Any]:
@@ -106,7 +133,7 @@ async def _collect_zone(
     now = datetime.now(timezone.utc).isoformat()
 
     try:
-        async with session.get(url, params=params, auth=auth, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+        async with session.get(url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
             if resp.status == 429:
                 logger.warning(f"OpenSky rate limit 초과 ({zone_def['name']})")
                 return {

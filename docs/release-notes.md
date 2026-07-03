@@ -4,6 +4,33 @@
 
 ---
 
+## v0.0.05 — 2026-07-03
+
+### 핵심: 입력기준 중복제거(input-gating)로 알림 노이즈 제거
+운영 중 동일 사건이 표현만 바뀌어 5분마다 반복 발송되던 문제를 근본 수정.
+
+1. **LLM 호출 게이팅** (`kaven.py`)
+   - `_trigger_signatures()` / `_new_trigger_signatures()` / `_record_seen_inputs()` 신규
+   - 새 자극(신규 뉴스 URL, anomaly 있는 AIS/ADS-B)이 없으면 LLM 분석·발송을 통째로 스킵
+   - 자극 시그니처: 뉴스=url(없으면 title), AIS/ADS-B=`zone+anomaly+규모버킷(10단위)`
+   - `sent_cache.json`에 `seen_inputs` 기록, 발송이 없어도 보존
+2. **source_url 전파** (`analyzer.py`)
+   - `_summarize_data()`가 LLM 입력에 뉴스 `url` 포함 → 출력 `source_url`이 채워짐 → URL 기반 dedup 복구
+3. **fingerprint 정밀화** (`kaven.py` `_content_fingerprint`)
+   - 키에 `region` 추가 → URL 없는 서로 다른 severity 5 사건이 한 지문으로 뭉개지던 문제 해소
+4. **응답 파싱 견고화** (`analyzer.py` `_parse_analysis_response`)
+   - 널바이트 제거, 균형 괄호 매칭으로 JSON 후보 추출 → 로컬/외부 LLM 출력 편차에 견고
+
+### 저장소 위생
+- 과거 커밋되어 추적되던 운영 데이터 추적 해제: `logs/maven_*.jsonl` 20건 + `sent_cache.json`
+  - `.gitignore` 규칙 추가 이전 커밋분이 계속 추적되던 상태를 정리
+  - 항상 dirty로 잡히던 `sent_cache.json`이 자동 동기화를 중단시키던 원인 제거
+
+### 수집기
+- **OpenSky**: Basic Auth 폐지 대응, OAuth2 client_credentials(`OPENSKY_CLIENT_ID`/`OPENSKY_CLIENT_SECRET`)로 Bearer 토큰 인증 복원 (`adsb_collector.py`)
+
+---
+
 ## v0.0.04 — 2026-04-13
 
 ### 주요 변경사항 (설정 파일화 + Codex 리뷰 반영)
