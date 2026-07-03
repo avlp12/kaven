@@ -229,7 +229,8 @@ def _content_fingerprint(event: dict) -> str:
     event_text = event.get("event", "")
     numeric_tokens = sorted(_re.findall(NUMERIC_TOKEN_PATTERN, event_text))
     source_url = event.get("source_url") or ""
-    key = f"{event.get('severity', 0)}|{source_url}|{'/'.join(numeric_tokens)}"
+    region = event.get("region") or ""
+    key = f"{event.get('severity', 0)}|{region}|{source_url}|{'/'.join(numeric_tokens)}"
     return hashlib.md5(key.encode()).hexdigest()
 
 
@@ -248,10 +249,11 @@ def _load_sent_cache() -> dict:
         try:
             data = json.loads(cache_file.read_text())
             if data.get("date") == today:
+                data.setdefault("seen_inputs", {})
                 return data
         except Exception:
             pass
-    return {"date": today, "sent": []}
+    return {"date": today, "sent": [], "seen_inputs": {}}
 
 
 def _save_sent_cache(cache: dict):
@@ -432,6 +434,51 @@ def _upload_remote_if_enabled(log_entry: dict, events: list, signal_result: dict
         logger.warning(f"Convex 저장 실패 (로컬 로그는 유지): {e}")
 
 
+def _trigger_signatures(collected: dict) -> set[str]:
+    """
+    LLM 분석을 새로 돌릴 가치가 있는 '자극 입력'의 시그니처 집합.
+
+    - 뉴스: url (없으면 title) 단위 — 새 기사가 곧 새 자극
+    - AIS/ADSB: anomaly 있는 항목만, zone+anomaly+규모버킷 단위
+      (지속되는 동일 이상은 같은 시그니처 → 반복 트리거 안 됨)
+    정상 수치(anomaly 없음)는 자극으로 보지 않는다.
+    """
+    sigs: set[str] = set()
+
+    for item in collected.get("news", []):
+        key = (item.get("url") or "").strip() or (item.get("title") or "").strip()
+        if key:
+            sigs.add(f"news:{key}")
+
+    for item in collected.get("ais", []):
+        if item.get("anomaly"):
+            zone = item.get("zone", item.get("zone_name", "?"))
+            bucket = int((item.get("ship_count") or 0) // 10)
+            sigs.add(f"ais:{zone}:{item['anomaly']}:{bucket}")
+
+    for item in collected.get("adsb", []):
+        if item.get("anomaly"):
+            zone = item.get("zone", item.get("zone_name", "?"))
+            bucket = int((item.get("military_count") or 0) // 10)
+            sigs.add(f"adsb:{zone}:{item['anomaly']}:{bucket}")
+
+    return sigs
+
+
+def _new_trigger_signatures(collected: dict, cache: dict) -> set[str]:
+    """이번 수집에서 '처음 보는' 자극 시그니처만 반환."""
+    seen = cache.get("seen_inputs", {})
+    return {s for s in _trigger_signatures(collected) if s not in seen}
+
+
+def _record_seen_inputs(cache: dict, signatures: set[str]):
+    """처리한 자극 시그니처를 캐시에 기록 (다음 사이클부터 재트리거 방지)."""
+    seen = cache.setdefault("seen_inputs", {})
+    now = datetime.now().isoformat()
+    for s in signatures:
+        seen[s] = now
+
+
 async def run_once():
     """1회 실행: 수집 → 분석 → 중복제거 → 신호 발송 → 로그 저장."""
     from analyzer import analyze
@@ -443,15 +490,24 @@ async def run_once():
     # 1. 데이터 수집
     collected = await run_collectors()
 
-    # 2. 분석
-    logger.info("분석 엔진 실행 중...")
-    events = await analyze(collected)
-    logger.info(f"분석 완료: {len(events)}건 이벤트 감지")
-
-    # 3. 중복 제거 (이미 전송한 이벤트 필터링)
+    # 2. 입력 게이팅 — 새 자극(신규 뉴스/이상)이 없으면 LLM 분석 자체를 스킵
     cache = _load_sent_cache()
-    events_to_send = _deduplicate_events(events, cache)
-    logger.info(f"중복 제거 후 발송 대상: {len(events_to_send)}건")
+    new_sigs = _new_trigger_signatures(collected, cache)
+    if not new_sigs:
+        logger.info("신규 입력 없음 — LLM 분석/발송 건너뜀 (동일 자극 반복 방지)")
+        events = []
+        events_to_send = []
+    else:
+        logger.info(f"신규 자극 {len(new_sigs)}건 — 분석 엔진 실행 중...")
+        events = await analyze(collected)
+        logger.info(f"분석 완료: {len(events)}건 이벤트 감지")
+
+        # 3. 중복 제거 (이미 전송한 이벤트 필터링)
+        events_to_send = _deduplicate_events(events, cache)
+        logger.info(f"중복 제거 후 발송 대상: {len(events_to_send)}건")
+
+    # 처리한 자극은 발송 여부와 무관하게 기록 (다음 사이클 재트리거 방지)
+    _record_seen_inputs(cache, _trigger_signatures(collected))
 
     # 4. 신호 발송
     if events_to_send:
@@ -463,6 +519,7 @@ async def run_once():
         _save_sent_cache(cache)
     else:
         signal_result = {"sent": 0, "logged": 0}
+        _save_sent_cache(cache)  # seen_inputs 갱신분 보존
         logger.info("이상 이벤트 없음 또는 전부 중복 — 신호 발송 건너뜀")
 
     # 4. 로그 저장

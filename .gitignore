@@ -17,6 +17,13 @@ src/kaven/.env
 # Tool harness session data
 .port_sessions/
 
+# Runtime logs
+src/kaven/logs/*.jsonl
+src/kaven/logs/sent_cache.json
+
+# Claude Code
+.claude/
+
 # OS junk
 .DS_Store
 Thumbs.db

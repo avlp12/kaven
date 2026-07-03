@@ -8,6 +8,7 @@ OpenClaw 게이트웨이(localhost:18789) 또는 직접 Anthropic API 호출.
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -184,6 +185,9 @@ def _summarize_data(collected_data: dict[str, Any]) -> str:
             parts.append(
                 f"- [{item.get('feed', 'unknown')}] {item.get('title', 'no title')}"
             )
+            url = item.get("url")
+            if url:
+                parts.append(f"  url: {url}")
             if item.get("summary"):
                 parts.append(f"  요약: {item['summary'][:200]}")
 
@@ -383,46 +387,58 @@ async def _call_anthropic_direct(api_key: str, summary: str) -> list[dict] | Non
 
 
 def _parse_analysis_response(text: str) -> list[dict]:
-    """Claude 응답 텍스트에서 JSON 배열 추출."""
+    """LLM 응답 텍스트에서 JSON 배열 추출."""
+    text = text.replace("\x00", "")
+    text = re.sub(r'"event_Time"', '"event_time"', text)
     text = text.strip()
 
-    # JSON 배열 직접 파싱 시도
+    # 1) 전체가 JSON인 경우
     try:
         result = json.loads(text)
         if isinstance(result, list):
-            return _dedup_events(result)
+            return _dedup_events([e for e in result if isinstance(e, dict)])
         if isinstance(result, dict):
             return [result]
     except json.JSONDecodeError:
         pass
 
-    # 코드블록 내 JSON 추출
+    # 2) 코드블록 내 JSON 추출
     if "```" in text:
-        for block in text.split("```"):
-            block = block.strip()
-            if block.startswith("json"):
-                block = block[4:].strip()
+        for m in re.finditer(r"```(?:json)?\s*([\s\S]*?)```", text):
+            block = m.group(1).strip()
             try:
                 result = json.loads(block)
                 if isinstance(result, list):
-                    return _dedup_events(result)
+                    return _dedup_events([e for e in result if isinstance(e, dict)])
                 if isinstance(result, dict):
                     return [result]
             except json.JSONDecodeError:
                 continue
 
-    # [ ... ] 패턴 찾기
-    start = text.find("[")
-    end = text.rfind("]")
-    if start != -1 and end != -1 and end > start:
+    # 3) 텍스트 내 모든 [ ... ] 후보를 뒤에서부터 시도
+    candidates = []
+    depth = 0
+    start = -1
+    for i, ch in enumerate(text):
+        if ch == "[":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "]":
+            depth -= 1
+            if depth == 0 and start != -1:
+                candidates.append(text[start:i + 1])
+                start = -1
+
+    for candidate in reversed(candidates):
         try:
-            result = json.loads(text[start:end + 1])
-            if isinstance(result, list):
+            result = json.loads(candidate)
+            if isinstance(result, list) and all(isinstance(e, dict) for e in result):
                 return _dedup_events(result)
         except json.JSONDecodeError:
-            pass
+            continue
 
-    logger.error(f"분석 응답 파싱 실패: {text[:200]}")
+    logger.error(f"분석 응답 파싱 실패: {text[:300]}")
     return []
 
 
