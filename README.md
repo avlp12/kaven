@@ -4,12 +4,22 @@
 
 Kaven은 AIS/ADS-B/뉴스/소셜 데이터를 수집하고, LLM 분석 + dedup 후 텔레그램 알림/로그 저장까지 수행하는 지정학 조기경보 시스템입니다.
 
-현재 버전: **0.0.07**
+현재 버전: **0.0.08**
 
 버전 정책:
 - 모든 업데이트 시 버전을 올리고(`0.0.01`부터 시작), 릴리스 노트/알림 헤더/로그 메타데이터에 동일 버전을 표시합니다.
 
-### 최근 업데이트 (v0.0.07)
+### 최근 업데이트 (v0.0.08)
+- **Ops Console 운영 능률(UX efficiency) 개선** — 프론트엔드 리뷰 후 조정.
+  - **전역 키보드 단축키**: `1`–`5` 뷰 전환, `J`/`K` 이벤트 순회(피드 정렬 순서 따름), `F` 피드+필터 포커스, `R` 수집 실행, `L` LIVE 토글, `Esc` 선택 해제, `?` 단축키 도움말 오버레이.
+  - **상태 지속성(localStorage)**: 마지막 뷰, 피드 필터, 정렬, LIVE 상태, 조용한 AO 표시 여부를 새로고침 후에도 복원.
+  - **데이터 신선도 표시**: 상단바 `SYNC n초 AGO` 실시간 표시, 90초 초과 시 경고색.
+  - **워치리스트 노이즈 감소**: S0·이벤트 0 지역은 접고 `+n QUIET` 토글로 펼침. 자산 클릭 시 Feed로 이동해 해당 자산 필터 자동 적용.
+  - **피드 정렬**: Time/Sev 헤더 클릭 정렬(방향 토글, ▾/▴ 표시).
+  - **인스펙터**: `‹`/`›` 이전·다음 이벤트 탐색, `⧉ JSON` 이벤트 복사 버튼.
+  - **커맨드 팔레트 액션 추가**: "Copy ops briefing (LLM context)" — `/agent/context` 브리핑을 클립보드로 복사.
+
+### 이전 업데이트 (v0.0.07)
 - **AI 에이전트 연동 계층 신설** — 에이전트가 Kaven을 도구로 사용할 수 있게 됨.
   - **MCP 서버** (`src/kaven/mcp_server.py`): 외부 SDK 의존성 없는 stdio MCP 서버. `kaven_ops_summary`, `kaven_events`, `kaven_agent_context`, `kaven_region`, `kaven_daily_report`, `kaven_portfolio`, `kaven_config`, `kaven_run_collection` 8개 도구 제공. 등록: `claude mcp add kaven -- python -m src.kaven.mcp_server`
   - **REST `/agent/*`**: `GET /agent/manifest`(엔드포인트/도구/스키마 어휘 카탈로그), `GET /agent/context`(LLM 프롬프트 주입용 압축 브리핑), `GET /agent/events`(평탄화 이벤트 쿼리 + 필터)

@@ -55,7 +55,24 @@ API 주소가 다르면 `http://127.0.0.1:8080/?api=http://다른호스트:8000`
 - **Asset Impact** — 자산별 7일 severity 히트맵
 - **System** — 수집 파이프라인/감시구역/피드/키워드 상태 보드
 - **커맨드 팔레트** — `Ctrl+K` 또는 `/` 로 지역·이벤트·자산·뷰 통합 검색
-- **상단 바** — THREATCON, UTC/KST 시계, LIVE(SSE) 토글, Run Collection
+  (+액션: 수집 실행, LIVE 토글, LLM 브리핑 클립보드 복사)
+- **상단 바** — THREATCON, SYNC 경과 표시, UTC/KST 시계, LIVE(SSE) 토글, Run Collection
+
+## 키보드 단축키 (v0.0.08)
+
+`?` 키(또는 좌측 레일 하단 버튼)로 콘솔 안에서 언제든 확인 가능.
+
+| 키 | 동작 |
+|---|---|
+| `1`–`5` | 뷰 전환 (COP / Feed / Intel / Assets / System) |
+| `Ctrl+K`, `/` | 커맨드 팔레트 |
+| `J` / `K` | 다음 / 이전 이벤트 선택 (피드 정렬 순서 기준) |
+| `F` | Feed 이동 + 텍스트 필터 포커스 |
+| `R` | 수집 파이프라인 1회 실행 |
+| `L` | LIVE(SSE) 토글 |
+| `Esc` | 선택 해제 / 오버레이 닫기 |
+
+뷰·필터·정렬·LIVE 상태는 localStorage에 저장되어 새로고침 후 복원됩니다.
 
 ## 실시간 갱신
 
