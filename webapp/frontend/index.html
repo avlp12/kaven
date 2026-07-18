@@ -3,452 +3,1158 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kaven Dashboard</title>
+  <title>KAVEN // OPS CONSOLE</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    :root { --bg: #0d1117; --card: #161b22; --border: #30363d; --text: #c9d1d9; --accent: #58a6ff; --red: #f85149; --orange: #d29922; --green: #3fb950; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
-
-    /* Navigation tabs */
-    nav { display: flex; border-bottom: 1px solid var(--border); background: var(--card); position: sticky; top: 0; z-index: 100; }
-    nav a { padding: 12px 24px; color: var(--text); text-decoration: none; border-bottom: 2px solid transparent; font-size: 14px; font-weight: 500; cursor: pointer; }
-    nav a.active { color: var(--accent); border-bottom-color: var(--accent); }
-    nav a:hover { color: #fff; }
-
-    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-    .page { display: none; }
-    .page.active { display: block; }
-    h1 { font-size: 24px; margin-bottom: 16px; }
-    h2 { font-size: 18px; margin: 20px 0 12px; color: var(--accent); }
-    h3 { font-size: 15px; margin: 16px 0 8px; }
-
-    /* Cards */
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
-    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-
-    /* Severity badges */
-    .sev { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-    .sev-5 { background: #f8514933; color: var(--red); }
-    .sev-4 { background: #d2992233; color: var(--orange); }
-    .sev-3 { background: #d2992233; color: #e3b341; }
-    .sev-2 { background: #58a6ff22; color: var(--accent); }
-    .sev-1 { background: #30363d; color: #8b949e; }
-    .sev-0 { background: #30363d; color: #484f58; }
-
-    /* Stats row */
-    .stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-    .stat { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; min-width: 140px; flex: 1; }
-    .stat .label { font-size: 11px; color: #8b949e; text-transform: uppercase; }
-    .stat .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
-
-    /* Table */
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }
-    th { color: #8b949e; font-weight: 500; font-size: 11px; text-transform: uppercase; }
-
-    /* Report markdown */
-    .markdown { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; line-height: 1.8; white-space: pre-wrap; font-size: 14px; }
-
-    /* Region cards grid */
-    .region-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
-    .region-card { cursor: pointer; transition: border-color 0.2s; }
-    .region-card:hover { border-color: var(--accent); }
-    .region-name { font-size: 16px; font-weight: 600; }
-    .region-desc { font-size: 12px; color: #8b949e; margin-top: 4px; }
-    .region-detail { display: none; }
-    .region-detail.active { display: block; }
-
-    /* History chart (simple bar) */
-    .history-bar { display: flex; align-items: flex-end; gap: 4px; height: 60px; margin: 12px 0; }
-    .history-bar .bar { flex: 1; border-radius: 3px 3px 0 0; min-width: 20px; transition: height 0.3s; }
-    .history-bar .bar-label { font-size: 10px; color: #8b949e; text-align: center; margin-top: 4px; }
-    .history-dates { display: flex; gap: 4px; }
-    .history-dates span { flex: 1; font-size: 10px; color: #484f58; text-align: center; }
-
-    /* Controls */
-    .controls { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
-    .controls select, .controls input { background: var(--card); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-size: 13px; }
-    .controls button { background: var(--accent); color: #fff; border: none; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
-    .controls button:hover { opacity: 0.9; }
-
-    /* Globe iframe */
-    #mapFrame { width: 100%; height: 80vh; border: 1px solid var(--border); border-radius: 8px; background: #000; }
-
-    .back-link { color: var(--accent); cursor: pointer; font-size: 13px; margin-bottom: 12px; display: inline-block; }
-    .back-link:hover { text-decoration: underline; }
-
-    /* Portfolio */
-    .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-    .asset-card { transition: border-color 0.2s; }
-    .asset-card:hover { border-color: var(--accent); }
-    .asset-name { font-size: 16px; font-weight: 600; }
-    .asset-type { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #30363d; color: #8b949e; margin-left: 8px; }
-    .signal-badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-    .signal-buy { background: #3fb95033; color: var(--green); }
-    .signal-sell { background: #f8514933; color: var(--red); }
-    .signal-hedge { background: #d2992233; color: var(--orange); }
-    .signal-hold { background: #58a6ff22; color: var(--accent); }
-    .signal-watch { background: #30363d; color: #8b949e; }
-    .heatmap-row { display: flex; gap: 2px; margin-top: 8px; }
-    .heatmap-cell { flex: 1; height: 24px; border-radius: 3px; position: relative; min-width: 16px; }
-    .heatmap-cell:hover::after { content: attr(data-tip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.9); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 10px; white-space: nowrap; z-index: 10; }
-
-    @media (max-width: 600px) {
-      nav a { padding: 10px 14px; font-size: 13px; }
-      .stats { flex-direction: column; }
+    /* ═══ Palantir Blueprint dark palette ═══ */
+    :root {
+      --bg0: #10141a;         /* app background   */
+      --bg1: #161b22;         /* panel            */
+      --bg2: #1c232c;         /* panel raised     */
+      --bg3: #252d38;         /* hover / input    */
+      --border: #2c3540;
+      --border-hi: #40506380;
+      --text: #e8ecf1;
+      --muted: #9aa5b1;
+      --dim: #5f6b7c;
+      --blue: #4c90f0;
+      --blue-deep: #2d72d2;
+      --cyan: #3fc6da;
+      --green: #32a467;
+      --yellow: #f5c538;
+      --orange: #ec9a3c;
+      --red: #e76a6e;
+      --red-deep: #cd4246;
+      --mono: "SF Mono", "JetBrains Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, "Noto Sans KR", sans-serif;
+      --rail-w: 46px;
+      --left-w: 264px;
+      --right-w: 330px;
+      --topbar-h: 44px;
+      --timeline-h: 74px;
     }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg0);
+      color: var(--text);
+      font-size: 13px;
+      overflow: hidden;
+    }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #333d4a; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #40506a; }
+
+    .mono { font-family: var(--mono); }
+
+    /* ═══ App shell ═══ */
+    #app { display: grid; grid-template-rows: var(--topbar-h) 1fr; height: 100vh; }
+    #shell { display: grid; grid-template-columns: var(--rail-w) var(--left-w) 1fr var(--right-w); min-height: 0; }
+    #shell.no-left { grid-template-columns: var(--rail-w) 0 1fr var(--right-w); }
+    #leftPanel { min-width: 0; overflow: hidden; }
+
+    /* ═══ Top bar ═══ */
+    #topbar {
+      display: flex; align-items: center; gap: 14px;
+      background: linear-gradient(180deg, #1a212b, #151b23);
+      border-bottom: 1px solid var(--border);
+      padding: 0 12px; z-index: 500;
+    }
+    #brand { display: flex; align-items: center; gap: 9px; user-select: none; }
+    #brand .mark {
+      width: 22px; height: 22px; border: 1.5px solid var(--blue);
+      display: grid; place-items: center; font-family: var(--mono);
+      font-size: 12px; font-weight: 700; color: var(--blue);
+      clip-path: polygon(0 0, 100% 0, 100% 70%, 70% 100%, 0 100%);
+      background: #1a2c4a55;
+    }
+    #brand .name { font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: 2.5px; }
+    #brand .sub { font-family: var(--mono); font-size: 9px; letter-spacing: 1.6px; color: var(--dim); margin-top: 1px; }
+    .tb-sep { width: 1px; height: 22px; background: var(--border); }
+    .tb-spacer { flex: 1; }
+
+    #threatcon {
+      display: flex; align-items: center; gap: 8px;
+      font-family: var(--mono); font-size: 11px; letter-spacing: 1px;
+      border: 1px solid var(--border); padding: 4px 10px; background: var(--bg1);
+    }
+    #threatcon .lvl { font-weight: 700; }
+    #threatcon .bars { display: flex; gap: 2px; align-items: flex-end; height: 12px; }
+    #threatcon .bars i { width: 3px; background: #333d4a; display: block; }
+
+    .tb-stat { font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: 1px; }
+    .tb-stat b { color: var(--muted); font-weight: 600; }
+
+    #clock { font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: right; line-height: 1.35; }
+    #clock .kst { color: var(--dim); font-size: 9.5px; }
+
+    #liveDot { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10px; letter-spacing: 1.2px; color: var(--dim); cursor: pointer; }
+    #liveDot .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
+    #liveDot.on { color: var(--green); }
+    #liveDot.on .dot { background: var(--green); box-shadow: 0 0 6px var(--green); animation: blink 2s infinite; }
+    @keyframes blink { 50% { opacity: .35; } }
+
+    .btn {
+      font-family: var(--mono); font-size: 10.5px; letter-spacing: 1px;
+      background: var(--bg2); color: var(--muted); border: 1px solid var(--border);
+      padding: 5px 12px; cursor: pointer; text-transform: uppercase;
+    }
+    .btn:hover { border-color: var(--border-hi); color: var(--text); background: var(--bg3); }
+    .btn.primary { background: #1a2c4a; border-color: var(--blue-deep); color: #a8c7f5; }
+    .btn.primary:hover { background: #21406e; color: #fff; }
+    .btn:disabled { opacity: .45; cursor: wait; }
+
+    #searchBtn { display: flex; align-items: center; gap: 8px; min-width: 190px; justify-content: space-between; text-transform: none; }
+    #searchBtn kbd { font-family: var(--mono); font-size: 9px; border: 1px solid var(--border); padding: 1px 5px; color: var(--dim); background: var(--bg1); }
+
+    /* ═══ Left rail ═══ */
+    #rail {
+      background: var(--bg1); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; align-items: center; padding-top: 8px; gap: 2px;
+    }
+    .rail-btn {
+      width: 36px; height: 36px; display: grid; place-items: center;
+      color: var(--dim); cursor: pointer; border: 1px solid transparent; position: relative;
+    }
+    .rail-btn:hover { color: var(--muted); background: var(--bg2); }
+    .rail-btn.active { color: var(--blue); background: #1a2c4a55; border-color: #2d72d255; }
+    .rail-btn.active::before { content: ''; position: absolute; left: -1px; top: 6px; bottom: 6px; width: 2px; background: var(--blue); }
+    .rail-btn svg { width: 17px; height: 17px; }
+    .rail-btn .tip {
+      position: absolute; left: 44px; top: 50%; transform: translateY(-50%);
+      background: #0a0d11; border: 1px solid var(--border); color: var(--muted);
+      font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.2px; padding: 4px 8px;
+      white-space: nowrap; display: none; z-index: 600;
+    }
+    .rail-btn:hover .tip { display: block; }
+    #rail .flex { flex: 1; }
+
+    /* ═══ Panels ═══ */
+    .panel { background: var(--bg1); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+    .panel-head {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 1.8px; color: var(--dim);
+      padding: 9px 12px 8px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+      text-transform: uppercase; background: var(--bg2);
+    }
+    .panel-body { overflow-y: auto; flex: 1; min-height: 0; }
+    .sec-head {
+      font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.6px; color: var(--dim);
+      padding: 10px 12px 5px; text-transform: uppercase; position: sticky; top: 0;
+      background: var(--bg1); z-index: 2;
+    }
+
+    /* AO (region) rows */
+    .ao-row {
+      padding: 7px 12px; cursor: pointer; border-left: 2px solid transparent;
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .ao-row:hover { background: var(--bg2); }
+    .ao-row.selected { background: #1a2c4a44; border-left-color: var(--blue); }
+    .ao-row .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .ao-row .nm { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ao-row .code { font-family: var(--mono); font-size: 9px; color: var(--dim); letter-spacing: 1px; text-transform: uppercase; }
+    .ao-row .meta { display: flex; align-items: center; gap: 8px; }
+    .ao-bar { height: 3px; background: #262f3a; flex: 1; position: relative; overflow: hidden; }
+    .ao-bar i { position: absolute; inset: 0; right: auto; display: block; }
+
+    .asset-row { padding: 6px 12px; display: flex; align-items: center; justify-content: space-between; cursor: default; gap: 8px; }
+    .asset-row:hover { background: var(--bg2); }
+    .asset-row .nm { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .asset-row .ct { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+
+    /* severity chips */
+    .sev-chip {
+      font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: .5px;
+      padding: 1px 6px; border: 1px solid; min-width: 34px; text-align: center; flex-shrink: 0;
+    }
+    .sig-chip { font-family: var(--mono); font-size: 9px; letter-spacing: 1px; padding: 1px 7px; border: 1px solid; text-transform: uppercase; }
+
+    /* ═══ Main area ═══ */
+    #main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg0); }
+    .view { display: none; flex: 1; min-height: 0; flex-direction: column; }
+    .view.active { display: flex; }
+
+    /* COP map */
+    #copView { position: relative; }
+    #mapWrap { flex: 1; position: relative; min-height: 0; background: #0a0e14; }
+    #map { position: absolute; inset: 0; z-index: 1; background: #0a0e14; }
+    #svgMap { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .map-hud {
+      position: absolute; z-index: 400; font-family: var(--mono); font-size: 9.5px;
+      letter-spacing: 1.2px; color: var(--dim); background: #10141acc; border: 1px solid var(--border);
+      padding: 4px 9px; pointer-events: none; text-transform: uppercase;
+    }
+    #hudTL { top: 10px; left: 10px; }
+    #hudBR { bottom: 10px; right: 10px; }
+    #mapLegend {
+      position: absolute; z-index: 400; bottom: 10px; left: 10px;
+      background: #10141acc; border: 1px solid var(--border); padding: 7px 10px;
+      font-family: var(--mono); font-size: 9px; letter-spacing: 1px; color: var(--dim);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    #mapLegend .li { display: flex; align-items: center; gap: 7px; }
+    #mapLegend .sw { width: 9px; height: 9px; border-radius: 50%; }
+    #mapLegend .zw { width: 12px; height: 8px; border: 1px dashed; border-radius: 1px; }
+
+    .leaflet-container { font-family: var(--sans); }
+    .leaflet-control-attribution { background: #10141aaa !important; color: var(--dim) !important; font-size: 9px !important; }
+    .leaflet-control-attribution a { color: var(--dim) !important; }
+    .leaflet-bar a { background: var(--bg2) !important; color: var(--muted) !important; border-color: var(--border) !important; }
+    .kv-tooltip {
+      background: #0a0d11 !important; border: 1px solid var(--border) !important; color: var(--text) !important;
+      font-size: 11px !important; border-radius: 0 !important; box-shadow: none !important; padding: 6px 9px !important;
+    }
+    .kv-tooltip::before { display: none; }
+    .pulse-marker { position: relative; }
+    .pulse-marker .ring {
+      position: absolute; inset: 0; border-radius: 50%; border: 2px solid currentColor;
+      animation: pulse 1.8s ease-out infinite;
+    }
+    @keyframes pulse { 0% { transform: scale(.6); opacity: .9; } 100% { transform: scale(2.4); opacity: 0; } }
+
+    /* Timeline strip */
+    #timeline {
+      height: var(--timeline-h); border-top: 1px solid var(--border); background: var(--bg1);
+      flex-shrink: 0; display: flex; flex-direction: column;
+    }
+    #timeline .tl-head { display: flex; justify-content: space-between; padding: 5px 12px 0; }
+    #timeline .tl-title { font-family: var(--mono); font-size: 9px; letter-spacing: 1.6px; color: var(--dim); text-transform: uppercase; }
+    #tlTrack { position: relative; flex: 1; margin: 4px 12px 8px; border-left: 1px solid var(--border); border-right: 1px solid var(--border); background: linear-gradient(180deg, transparent 49%, #262f3a 49%, #262f3a 51%, transparent 51%); }
+    .tl-tick { position: absolute; top: 0; bottom: 0; width: 1px; background: #232b35; }
+    .tl-tick span { position: absolute; bottom: -2px; left: 3px; font-family: var(--mono); font-size: 8px; color: var(--dim); }
+    .tl-dot {
+      position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%;
+      transform: translate(-50%, -50%); cursor: pointer; border: 1.5px solid #10141a;
+    }
+    .tl-dot:hover, .tl-dot.selected { transform: translate(-50%, -50%) scale(1.5); z-index: 5; box-shadow: 0 0 8px currentColor; }
+
+    /* ═══ Feed view ═══ */
+    .toolbar {
+      display: flex; gap: 8px; align-items: center; padding: 8px 14px;
+      border-bottom: 1px solid var(--border); background: var(--bg1); flex-wrap: wrap; flex-shrink: 0;
+    }
+    .toolbar select, .toolbar input[type=text] {
+      background: var(--bg2); color: var(--text); border: 1px solid var(--border);
+      padding: 5px 8px; font-size: 12px; font-family: var(--mono); outline: none;
+    }
+    .toolbar select:focus, .toolbar input:focus { border-color: var(--blue-deep); }
+    .toolbar .count { font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: 1px; margin-left: auto; }
+
+    .grid-table { width: 100%; border-collapse: collapse; }
+    .grid-table th {
+      font-family: var(--mono); font-size: 9px; letter-spacing: 1.5px; color: var(--dim);
+      text-transform: uppercase; text-align: left; padding: 7px 10px;
+      border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg1); z-index: 2;
+    }
+    .grid-table td { padding: 7px 10px; border-bottom: 1px solid #1e252e; font-size: 12.5px; vertical-align: top; }
+    .grid-table tbody tr { cursor: pointer; }
+    .grid-table tbody tr:hover { background: var(--bg2); }
+    .grid-table tbody tr.selected { background: #1a2c4a44; box-shadow: inset 2px 0 0 var(--blue); }
+    .scroll-area { overflow: auto; flex: 1; min-height: 0; }
+
+    /* ═══ Intel view ═══ */
+    .intel-wrap { max-width: 860px; margin: 0 auto; padding: 18px 24px 40px; width: 100%; }
+    .stat-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .stat-card { background: var(--bg1); border: 1px solid var(--border); padding: 10px 14px; min-width: 130px; flex: 1; }
+    .stat-card .lb { font-family: var(--mono); font-size: 9px; letter-spacing: 1.5px; color: var(--dim); text-transform: uppercase; }
+    .stat-card .vl { font-family: var(--mono); font-size: 21px; font-weight: 700; margin-top: 4px; }
+    .md { background: var(--bg1); border: 1px solid var(--border); padding: 22px 26px; line-height: 1.75; font-size: 13.5px; }
+    .md h1 { font-size: 19px; margin: 0 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+    .md h2 { font-size: 15px; margin: 20px 0 8px; color: var(--blue); font-family: var(--mono); letter-spacing: .5px; }
+    .md h3 { font-size: 13.5px; margin: 14px 0 6px; color: var(--muted); }
+    .md ul { padding-left: 20px; }
+    .md li { margin: 3px 0; }
+    .md code { font-family: var(--mono); background: var(--bg3); padding: 1px 5px; font-size: 11.5px; color: var(--cyan); }
+    .md strong { color: #fff; }
+    .md hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
+
+    /* ═══ Assets view ═══ */
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; padding: 14px; }
+    .a-card { background: var(--bg1); border: 1px solid var(--border); padding: 12px 14px; }
+    .a-card:hover { border-color: var(--border-hi); }
+    .a-card .hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+    .a-card .nm { font-size: 14px; font-weight: 700; }
+    .a-card .tp { font-family: var(--mono); font-size: 8.5px; letter-spacing: 1.2px; color: var(--dim); border: 1px solid var(--border); padding: 1px 6px; text-transform: uppercase; margin-left: 7px; }
+    .a-card .ds { font-size: 11.5px; color: var(--muted); margin-bottom: 8px; }
+    .hm-row { display: flex; gap: 2px; }
+    .hm-cell { flex: 1; height: 20px; position: relative; min-width: 14px; }
+    .hm-cell:hover::after {
+      content: attr(data-tip); position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+      background: #0a0d11; border: 1px solid var(--border); color: var(--text); padding: 3px 7px;
+      font-family: var(--mono); font-size: 9.5px; white-space: nowrap; z-index: 10;
+    }
+
+    /* ═══ System view ═══ */
+    .sys-wrap { padding: 16px 20px 40px; max-width: 980px; width: 100%; margin: 0 auto; }
+    .sys-sec { background: var(--bg1); border: 1px solid var(--border); margin-bottom: 12px; }
+    .sys-sec .hd {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 1.6px; color: var(--muted);
+      text-transform: uppercase; padding: 8px 12px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; background: var(--bg2);
+    }
+    .en-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 7px; }
+
+    /* ═══ Inspector (right panel) ═══ */
+    #inspector { border-right: none; border-left: 1px solid var(--border); }
+    .insp-empty { padding: 40px 20px; text-align: center; color: var(--dim); font-family: var(--mono); font-size: 10px; letter-spacing: 1.6px; line-height: 2; }
+    .insp-band { height: 3px; }
+    .insp-sec { padding: 12px 14px; border-bottom: 1px solid #1e252e; }
+    .insp-title { font-size: 14px; font-weight: 700; line-height: 1.45; }
+    .kv { display: grid; grid-template-columns: 92px 1fr; gap: 4px 10px; font-size: 11.5px; }
+    .kv .k { font-family: var(--mono); font-size: 9px; letter-spacing: 1.2px; color: var(--dim); text-transform: uppercase; padding-top: 2px; }
+    .kv .v { color: var(--text); word-break: break-word; }
+    .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+    .chip { font-family: var(--mono); font-size: 10px; background: var(--bg3); border: 1px solid var(--border); padding: 2px 8px; color: var(--muted); }
+    .insp-block { font-size: 12px; color: var(--muted); line-height: 1.65; background: var(--bg2); border-left: 2px solid var(--border-hi); padding: 8px 10px; }
+    .spark { display: flex; align-items: flex-end; gap: 3px; height: 46px; }
+    .spark .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; height: 100%; }
+    .spark .bar { width: 70%; min-height: 2px; }
+    .spark .dt { font-family: var(--mono); font-size: 7.5px; color: var(--dim); }
+    .insp-ev { padding: 7px 9px; border: 1px solid var(--border); border-left-width: 2px; margin-bottom: 6px; cursor: pointer; font-size: 11.5px; line-height: 1.5; background: var(--bg2); }
+    .insp-ev:hover { background: var(--bg3); }
+    .src-link { font-family: var(--mono); font-size: 10.5px; color: var(--blue); word-break: break-all; text-decoration: none; }
+    .src-link:hover { text-decoration: underline; }
+
+    /* ═══ Command palette ═══ */
+    #paletteOverlay {
+      position: fixed; inset: 0; background: #05070acc; z-index: 900;
+      display: none; justify-content: center; align-items: flex-start; padding-top: 12vh;
+      backdrop-filter: blur(2px);
+    }
+    #paletteOverlay.open { display: flex; }
+    #palette { width: 560px; max-width: 92vw; background: var(--bg1); border: 1px solid var(--border-hi); box-shadow: 0 18px 60px #000c; }
+    #paletteInput {
+      width: 100%; background: var(--bg2); border: none; border-bottom: 1px solid var(--border);
+      color: var(--text); font-family: var(--mono); font-size: 14px; padding: 13px 16px; outline: none;
+    }
+    #paletteResults { max-height: 46vh; overflow-y: auto; }
+    .pal-item { padding: 9px 16px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+    .pal-item.active { background: #1a2c4a66; box-shadow: inset 2px 0 0 var(--blue); }
+    .pal-item .tag { font-family: var(--mono); font-size: 8.5px; letter-spacing: 1.2px; color: var(--dim); border: 1px solid var(--border); padding: 1px 6px; text-transform: uppercase; flex-shrink: 0; min-width: 52px; text-align: center; }
+    .pal-item .lbl { flex: 1; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pal-hint { font-family: var(--mono); font-size: 9px; color: var(--dim); letter-spacing: 1px; padding: 7px 16px; border-top: 1px solid var(--border); display: flex; gap: 16px; }
+
+    /* ═══ Toast ═══ */
+    #toasts { position: fixed; bottom: 18px; right: 18px; z-index: 950; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      font-family: var(--mono); font-size: 10.5px; letter-spacing: 1px; background: #0a0d11;
+      border: 1px solid var(--border-hi); border-left: 2px solid var(--blue); color: var(--muted);
+      padding: 9px 14px; animation: slideIn .25s ease; max-width: 340px;
+    }
+    @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } }
+
+    .offline-note { padding: 10px 14px; font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: 1px; }
   </style>
 </head>
 <body>
-  <nav>
-    <a class="active" data-page="dashboard">Dashboard</a>
-    <a data-page="report">Report</a>
-    <a data-page="map">Map</a>
-    <a data-page="guide">Guide</a>
-    <a data-page="portfolio">Portfolio</a>
-  </nav>
+<div id="app">
 
-  <!-- ============ Dashboard ============ -->
-  <div id="dashboard" class="page active">
-    <div class="container">
-      <h1>Kaven Dashboard</h1>
-      <div class="controls">
-        <button id="runOnceBtn">Run Once</button>
-        <button id="refreshBtn">Refresh</button>
-        <select id="severityMin"><option value="">Severity: All</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option><option value="5">5</option></select>
-        <select id="category"><option value="">Category: All</option><option value="energy">energy</option><option value="semiconductor">semiconductor</option><option value="currency">currency</option><option value="conflict">conflict</option><option value="other">other</option></select>
-        <input id="query" type="text" placeholder="keyword..." />
-      </div>
-      <div class="stats" id="dashStats"></div>
-      <table>
-        <thead><tr><th>Time</th><th>Sev</th><th>Category</th><th>Region</th><th>Event</th><th>Signal</th></tr></thead>
-        <tbody id="eventsBody"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- ============ Report ============ -->
-  <div id="report" class="page">
-    <div class="container">
-      <h1>Daily Report</h1>
-      <div class="controls">
-        <select id="reportDate"></select>
-        <button id="loadReportBtn">Load</button>
-      </div>
-      <div class="stats" id="reportStats"></div>
-      <div class="markdown" id="reportMarkdown">Loading...</div>
-    </div>
-  </div>
-
-  <!-- ============ Map ============ -->
-  <div id="map" class="page">
-    <div class="container">
-      <h1>Global Conflict Map</h1>
-      <div id="mapContainer"></div>
-    </div>
-  </div>
-
-  <!-- ============ Guide ============ -->
-  <div id="guide" class="page">
-    <div class="container">
-      <div id="guideOverview">
-        <h1>Region Guide</h1>
-        <div class="stats" id="guideStats"></div>
-        <div class="region-grid" id="regionGrid"></div>
-      </div>
-      <div id="guideDetail" class="region-detail">
-        <span class="back-link" id="guideBackLink">&larr; Back to overview</span>
-        <div id="guideDetailContent"></div>
+  <!-- ═══════════ TOP BAR ═══════════ -->
+  <header id="topbar">
+    <div id="brand">
+      <div class="mark">K</div>
+      <div>
+        <div class="name">KAVEN</div>
+        <div class="sub">GEOPOLITICAL OPS CONSOLE</div>
       </div>
     </div>
-  </div>
-
-  <!-- ============ Portfolio ============ -->
-  <div id="portfolio" class="page">
-    <div class="container">
-      <h1>Portfolio Impact</h1>
-      <p style="color:#8b949e;margin-bottom:16px">지정학 이벤트가 투자 자산에 미치는 영향을 추적합니다. 최근 7일간 이벤트 빈도 + severity 히트맵.</p>
-      <div class="stats" id="portfolioStats"></div>
-      <div class="asset-grid" id="assetGrid"></div>
+    <div class="tb-sep"></div>
+    <div id="threatcon" title="오늘의 최고 severity 기준 위협 수준">
+      <span style="color:var(--dim)">THREATCON</span>
+      <span class="lvl" id="tcLabel">--</span>
+      <span class="bars" id="tcBars"></span>
     </div>
-  </div>
+    <div class="tb-stat" id="tbTotals">RUNS <b>-</b> · EVENTS <b>-</b> · UNIQUE <b>-</b></div>
+    <div class="tb-spacer"></div>
+    <button class="btn" id="searchBtn"><span style="color:var(--dim)">Search objects…</span><kbd>Ctrl K</kbd></button>
+    <button class="btn primary" id="runBtn">▸ Run Collection</button>
+    <div class="tb-sep"></div>
+    <div id="liveDot" title="SSE 실시간 스트림 토글"><span class="dot"></span>LIVE</div>
+    <div class="tb-sep"></div>
+    <div id="clock"><div class="utc">--:--:--Z</div><div class="kst">KST --:--:--</div></div>
+  </header>
 
-  <script>
-    const API = 'http://127.0.0.1:8000';
-    const SEV_COLORS = {0:'#30363d',1:'#484f58',2:'#58a6ff',3:'#e3b341',4:'#d29922',5:'#f85149'};
-    const SEV_EMOJI = {0:'',1:'⚪',2:'🔵',3:'🟡',4:'🟠',5:'🔴'};
+  <!-- ═══════════ SHELL ═══════════ -->
+  <div id="shell">
 
-    // ── Navigation ──
+    <!-- rail -->
+    <nav id="rail">
+      <div class="rail-btn active" data-view="cop" title="">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>
+        <span class="tip">COMMON OP PICTURE</span>
+      </div>
+      <div class="rail-btn" data-view="feed">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        <span class="tip">EVENT FEED</span>
+      </div>
+      <div class="rail-btn" data-view="intel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h7"/></svg>
+        <span class="tip">INTEL REPORT</span>
+      </div>
+      <div class="rail-btn" data-view="assets">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 20h18M5 20V10m5 10V4m5 16v-8m5 8V7"/></svg>
+        <span class="tip">ASSET IMPACT</span>
+      </div>
+      <div class="flex"></div>
+      <div class="rail-btn" data-view="system">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
+        <span class="tip">SYSTEM / COLLECTION</span>
+      </div>
+    </nav>
 
-    document.querySelectorAll('nav a').forEach(a => {
-      a.onclick = () => {
-        document.querySelectorAll('nav a').forEach(x => x.classList.remove('active'));
-        document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
-        a.classList.add('active');
-        const page = document.getElementById(a.dataset.page);
-        page.classList.add('active');
-        if (a.dataset.page === 'report') loadReportDates();
-        if (a.dataset.page === 'map') loadMap();
-        if (a.dataset.page === 'guide') loadGuide();
-        if (a.dataset.page === 'portfolio') loadPortfolio();
-      };
-    });
+    <!-- left: watchlist -->
+    <aside class="panel" id="leftPanel">
+      <div class="panel-head">Watchlist<span class="mono" id="wlDate" style="letter-spacing:.5px"></span></div>
+      <div class="panel-body">
+        <div class="sec-head">Areas of Operation</div>
+        <div id="aoList"></div>
+        <div class="sec-head">Impacted Assets</div>
+        <div id="assetList"></div>
+      </div>
+    </aside>
 
-    // ── Dashboard ──
+    <!-- main -->
+    <main id="main">
 
-    async function fetchRuns() {
-      const p = new URLSearchParams({limit:'30'});
-      const sev = document.getElementById('severityMin').value;
-      const cat = document.getElementById('category').value;
-      const q = document.getElementById('query').value.trim();
-      if (sev) p.set('severity_min', sev);
-      if (cat) p.set('category', cat);
-      if (q) p.set('q', q);
-      try {
-        const res = await fetch(`${API}/runs?${p}`);
-        const data = await res.json();
-        renderDashboard(data);
-      } catch (e) { console.error(e); }
-    }
-
-    function renderDashboard(data) {
-      const runs = data.runs || [];
-      let allEvents = [];
-      runs.forEach(r => (r.events||[]).forEach(e => { e._run = r; allEvents.push(e); }));
-
-      const maxSev = allEvents.length ? Math.max(...allEvents.map(e=>e.severity||0)) : 0;
-      const cats = {};
-      allEvents.forEach(e => { cats[e.category||'other'] = (cats[e.category||'other']||0)+1; });
-
-      document.getElementById('dashStats').innerHTML = `
-        <div class="stat"><div class="label">Risk Level</div><div class="value" style="color:${SEV_COLORS[maxSev]}">${SEV_EMOJI[maxSev]} Lv.${maxSev}</div></div>
-        <div class="stat"><div class="label">Events</div><div class="value">${allEvents.length}</div></div>
-        <div class="stat"><div class="label">Runs</div><div class="value">${runs.length}</div></div>
-      `;
-
-      const rows = allEvents.slice(0,50).map(e => `<tr>
-        <td>${(e._run.started_at||'').slice(11,16)}</td>
-        <td><span class="sev sev-${e.severity||0}">${e.severity||0}</span></td>
-        <td>${e.category||''}</td>
-        <td>${e.region||''}</td>
-        <td>${e.event||''}</td>
-        <td>${e.signal||''}</td>
-      </tr>`);
-      document.getElementById('eventsBody').innerHTML = rows.join('');
-    }
-
-    document.getElementById('refreshBtn').onclick = fetchRuns;
-    document.getElementById('runOnceBtn').onclick = async () => {
-      await fetch(`${API}/runs/once`,{method:'POST'});
-      fetchRuns();
-    };
-    ['severityMin','category','query'].forEach(id =>
-      document.getElementById(id).addEventListener('change', fetchRuns));
-    fetchRuns();
-
-    // ── Report ──
-
-    async function loadReportDates() {
-      try {
-        const res = await fetch(`${API}/report/dates`);
-        const data = await res.json();
-        const sel = document.getElementById('reportDate');
-        sel.innerHTML = (data.dates||[]).map(d => `<option value="${d}">${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}</option>`).join('');
-        if (data.dates && data.dates.length) loadReport(data.dates[0]);
-      } catch(e) { console.error(e); }
-    }
-
-    async function loadReport(date) {
-      try {
-        const res = await fetch(`${API}/report/${date}`);
-        if (!res.ok) { document.getElementById('reportMarkdown').textContent = 'No data for this date.'; return; }
-        const data = await res.json();
-
-        document.getElementById('reportStats').innerHTML = `
-          <div class="stat"><div class="label">Date</div><div class="value">${data.date}</div></div>
-          <div class="stat"><div class="label">Risk Level</div><div class="value" style="color:${SEV_COLORS[data.max_severity]}">${SEV_EMOJI[data.max_severity]} Lv.${data.max_severity}</div></div>
-          <div class="stat"><div class="label">Unique Events</div><div class="value">${data.unique_events}</div></div>
-          <div class="stat"><div class="label">Total Runs</div><div class="value">${data.total_runs}</div></div>
-        `;
-        document.getElementById('reportMarkdown').textContent = data.markdown;
-      } catch(e) { document.getElementById('reportMarkdown').textContent = 'Error loading report.'; }
-    }
-
-    document.getElementById('loadReportBtn').onclick = () => {
-      const d = document.getElementById('reportDate').value;
-      if (d) loadReport(d);
-    };
-
-    // ── Map ──
-
-    let mapLoaded = false;
-    async function loadMap() {
-      if (mapLoaded) return;
-      mapLoaded = true;
-      const container = document.getElementById('mapContainer');
-      try {
-        const res = await fetch(`${API}/map/data`);
-        const data = await res.json();
-        // Build a self-contained globe HTML with live data
-        const points = JSON.stringify(data.points || []);
-        const iframe = document.createElement('iframe');
-        iframe.id = 'mapFrame';
-        iframe.srcdoc = buildGlobeHtml(points);
-        container.innerHTML = '';
-        container.appendChild(iframe);
-      } catch(e) {
-        container.innerHTML = '<div class="card">Map API unavailable. Start the backend server first.</div>';
-      }
-    }
-
-    function buildGlobeHtml(pointsJson) {
-      return `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<style>body{margin:0;background:#000;overflow:hidden}
-#info{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.85);color:#fff;padding:15px;border-radius:8px;max-width:350px;font-size:13px;font-family:sans-serif;z-index:10}
-#info h3{margin:0 0 8px;color:#58a6ff}
-.ev{background:rgba(255,255,255,.08);padding:6px 8px;margin:4px 0;border-radius:4px;border-left:3px solid #888}
-.ev.s5{border-color:#f85149}.ev.s4{border-color:#d29922}.ev.s3{border-color:#e3b341}.ev.s2{border-color:#58a6ff}
-</style></head><body>
-<div id="globe"></div>
-<div id="info"><h3>Kaven Conflict Map</h3><div id="events"></div></div>
-<script src="https://unpkg.com/d3@7/dist/d3.min.js"><\/script>
-<script src="https://unpkg.com/globe.gl@2/dist/globe.gl.min.js"><\/script>
-<script>
-const pts=${pointsJson};
-const sevCol={5:'#f85149',4:'#d29922',3:'#e3b341',2:'#58a6ff',1:'#484f58'};
-const evDiv=document.getElementById('events');
-pts.forEach(p=>{const d=document.createElement('div');d.className='ev s'+p.severity;d.innerHTML='<b>'+p.name+'</b> [Lv.'+p.severity+']<br><span style="font-size:11px;color:#aaa">'+p.event+'</span>';evDiv.appendChild(d);});
-if(pts.length===0) evDiv.innerHTML='<div style="color:#8b949e">No events today</div>';
-const w=Globe()(document.getElementById('globe'))
-  .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
-  .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
-  .pointsData(pts).pointLat('lat').pointLng('lng')
-  .pointColor(d=>sevCol[d.severity]||'#888')
-  .pointAltitude(d=>0.02+d.severity*0.02)
-  .pointRadius(d=>0.3+d.severity*0.15)
-  .pointLabel(d=>'<div style="background:rgba(0,0,0,.9);color:#fff;padding:8px;border-radius:4px;font-size:12px"><b>'+d.name+'</b><br>'+d.event+'<br><span style="color:#aaa">Severity: '+d.severity+'</span></div>');
-w.controls().autoRotate=true;w.controls().autoRotateSpeed=0.3;
-w.pointOfView({lat:35,lng:90,altitude:2.2},1000);
-w.onPointClick(p=>w.pointOfView({lat:p.lat,lng:p.lng,altitude:1.2},800));
-<\/script></body></html>`;
-    }
-
-    // ── Guide ──
-
-    async function loadGuide() {
-      const overview = document.getElementById('guideOverview');
-      const detail = document.getElementById('guideDetail');
-      overview.style.display = 'block';
-      detail.classList.remove('active');
-
-      try {
-        const res = await fetch(`${API}/guide`);
-        const data = await res.json();
-
-        document.getElementById('guideStats').innerHTML = `
-          <div class="stat"><div class="label">Date</div><div class="value">${data.date}</div></div>
-          <div class="stat"><div class="label">Global Risk</div><div class="value" style="color:${SEV_COLORS[data.max_severity]}">${SEV_EMOJI[data.max_severity]} Lv.${data.max_severity}</div></div>
-        `;
-
-        const grid = document.getElementById('regionGrid');
-        grid.innerHTML = data.regions.map(r => `
-          <div class="card region-card" data-region="${r.code}">
-            <div class="card-header">
-              <span class="region-name">${r.name}</span>
-              <span class="sev sev-${r.current_severity}">Lv.${r.current_severity}</span>
-            </div>
-            <div class="region-desc">${r.description}</div>
-            <div style="margin-top:8px;font-size:12px;color:#8b949e">Events today: ${r.event_count}</div>
+      <!-- COP -->
+      <section class="view active" id="copView" data-view="cop">
+        <div id="mapWrap">
+          <div id="map"></div>
+          <div class="map-hud" id="hudTL">COP // LIVE COMMON OPERATING PICTURE</div>
+          <div class="map-hud" id="hudBR">KAVEN v- · UTC</div>
+          <div id="mapLegend">
+            <div class="li"><span class="sw" style="background:#e76a6e"></span>SEV 5 CRITICAL</div>
+            <div class="li"><span class="sw" style="background:#ec9a3c"></span>SEV 4 ALERT</div>
+            <div class="li"><span class="sw" style="background:#f5c538"></span>SEV 3 CAUTION</div>
+            <div class="li"><span class="sw" style="background:#4c90f0"></span>SEV 1-2 MONITOR</div>
+            <div class="li"><span class="zw" style="border-color:#3fc6da"></span>ADS-B ZONE</div>
+            <div class="li"><span class="zw" style="border-color:#32a467"></span>AIS ZONE</div>
           </div>
-        `).join('');
+        </div>
+        <div id="timeline">
+          <div class="tl-head">
+            <span class="tl-title">Event Timeline · <span id="tlDate">-</span> UTC</span>
+            <span class="tl-title" id="tlCount"></span>
+          </div>
+          <div id="tlTrack"></div>
+        </div>
+      </section>
 
-        grid.querySelectorAll('.region-card').forEach(card => {
-          card.onclick = () => loadRegionDetail(card.dataset.region);
-        });
-      } catch(e) { console.error(e); }
+      <!-- FEED -->
+      <section class="view" id="feedView" data-view="feed">
+        <div class="toolbar">
+          <select id="fSev"><option value="0">SEV ≥ ALL</option><option value="2">SEV ≥ 2</option><option value="3">SEV ≥ 3</option><option value="4">SEV ≥ 4</option><option value="5">SEV = 5</option></select>
+          <select id="fCat"><option value="">CATEGORY: ALL</option></select>
+          <select id="fSig"><option value="">SIGNAL: ALL</option></select>
+          <input type="text" id="fQuery" placeholder="filter text…" style="min-width:180px" />
+          <span class="count" id="fCount"></span>
+        </div>
+        <div class="scroll-area">
+          <table class="grid-table">
+            <thead><tr><th style="width:64px">Time</th><th style="width:52px">Sev</th><th style="width:110px">Region</th><th style="width:100px">Category</th><th>Event</th><th style="width:70px">Signal</th><th style="width:170px">Assets</th></tr></thead>
+            <tbody id="feedBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- INTEL -->
+      <section class="view" id="intelView" data-view="intel">
+        <div class="toolbar">
+          <select id="reportDate"></select>
+          <button class="btn" id="loadReportBtn">Load</button>
+          <span class="count" id="intelHint">RULE-BASED DAILY BRIEFING · NO LLM REQUIRED</span>
+        </div>
+        <div class="scroll-area"><div class="intel-wrap">
+          <div class="stat-row" id="intelStats"></div>
+          <div class="md" id="intelMd">SELECT DATE…</div>
+        </div></div>
+      </section>
+
+      <!-- ASSETS -->
+      <section class="view" id="assetsView" data-view="assets">
+        <div class="toolbar"><span class="count" id="assetsHint">GEOPOLITICAL EVENT → PORTFOLIO IMPACT · 7-DAY HEATMAP</span></div>
+        <div class="scroll-area">
+          <div class="stat-row" id="assetsStats" style="padding:14px 14px 0"></div>
+          <div class="cards-grid" id="assetsGrid"></div>
+        </div>
+      </section>
+
+      <!-- SYSTEM -->
+      <section class="view" id="systemView" data-view="system">
+        <div class="toolbar"><span class="count" id="sysHint">COLLECTION STATUS · WATCHZONES · FEEDS · KEYWORDS</span></div>
+        <div class="scroll-area"><div class="sys-wrap" id="sysWrap">Loading…</div></div>
+      </section>
+
+    </main>
+
+    <!-- inspector -->
+    <aside class="panel" id="inspector">
+      <div class="panel-head">Inspector<span id="inspClear" style="cursor:pointer;letter-spacing:0" title="clear">✕</span></div>
+      <div class="insp-band" id="inspBand"></div>
+      <div class="panel-body" id="inspBody">
+        <div class="insp-empty">NO OBJECT SELECTED<br/><br/>SELECT AN EVENT, REGION<br/>OR TIMELINE MARKER</div>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<!-- command palette -->
+<div id="paletteOverlay">
+  <div id="palette">
+    <input id="paletteInput" placeholder="Search regions, events, assets, views…  ( > for views )" autocomplete="off" />
+    <div id="paletteResults"></div>
+    <div class="pal-hint"><span>↑↓ NAVIGATE</span><span>↵ OPEN</span><span>ESC CLOSE</span></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+'use strict';
+
+/* ═══════════ constants ═══════════ */
+const API = new URLSearchParams(location.search).get('api') || 'http://127.0.0.1:8000';
+const SEV = {
+  0: { c: '#5f6b7c', bg: '#383e47', label: 'NOMINAL' },
+  1: { c: '#8a95a3', bg: '#383e47', label: 'LOW' },
+  2: { c: '#4c90f0', bg: '#1a2c4a', label: 'MONITOR' },
+  3: { c: '#f5c538', bg: '#4a3d12', label: 'CAUTION' },
+  4: { c: '#ec9a3c', bg: '#4a3312', label: 'ALERT' },
+  5: { c: '#e76a6e', bg: '#4a1a1c', label: 'CRITICAL' },
+};
+const THREATCON = { 0: 'NOMINAL', 1: 'NOMINAL', 2: 'MONITOR', 3: 'GUARDED', 4: 'ELEVATED', 5: 'CRITICAL' };
+const SIG = { buy: '#32a467', sell: '#e76a6e', hedge: '#ec9a3c', hold: '#4c90f0', watch: '#5f6b7c' };
+const CAT_LABEL = { energy: 'ENERGY', semiconductor: 'SEMICON', currency: 'CURRENCY', conflict: 'CONFLICT', other: 'OTHER' };
+
+const state = {
+  view: 'cop',
+  ops: null,             // /ops/summary payload
+  selected: null,        // {type:'event'|'region', id/code}
+  live: false,
+  regionHistoryCache: {},
+};
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+const sevOf = (n) => SEV[Math.max(0, Math.min(5, n | 0))];
+const sevChip = (n) => { const s = sevOf(n); return `<span class="sev-chip" style="color:${s.c};border-color:${s.c}55;background:${s.bg}66">S${n | 0}</span>`; };
+const sigChip = (sig) => { const c = SIG[sig] || SIG.watch; return `<span class="sig-chip" style="color:${c};border-color:${c}55">${esc(sig || 'watch')}</span>`; };
+
+/* ═══════════ clock ═══════════ */
+function tickClock() {
+  const now = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  document.querySelector('#clock .utc').textContent =
+    `${p(now.getUTCHours())}:${p(now.getUTCMinutes())}:${p(now.getUTCSeconds())}Z`;
+  const kst = new Date(now.getTime() + 9 * 3600 * 1000);
+  document.querySelector('#clock .kst').textContent =
+    `KST ${p(kst.getUTCHours())}:${p(kst.getUTCMinutes())}:${p(kst.getUTCSeconds())}`;
+}
+setInterval(tickClock, 1000); tickClock();
+
+/* ═══════════ toast ═══════════ */
+function toast(msg, color) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  if (color) el.style.borderLeftColor = color;
+  el.textContent = msg;
+  $('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 4200);
+}
+
+/* ═══════════ view switching ═══════════ */
+document.querySelectorAll('.rail-btn').forEach((b) => {
+  b.addEventListener('click', () => switchView(b.dataset.view));
+});
+function switchView(view) {
+  state.view = view;
+  document.querySelectorAll('.rail-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
+  if (view === 'cop' && map) setTimeout(() => map.invalidateSize(), 60);
+  if (view === 'intel') loadReportDates();
+  if (view === 'assets') loadAssets();
+  if (view === 'system') loadSystem();
+}
+
+/* ═══════════ map (Leaflet w/ SVG fallback) ═══════════ */
+let map = null, mapLayers = { zones: null, markers: null };
+const hasLeaflet = typeof L !== 'undefined';
+
+function initMap() {
+  if (!hasLeaflet) { $('map').innerHTML = ''; return; }
+  map = L.map('map', {
+    center: [26, 80], zoom: 3, minZoom: 2, maxZoom: 10,
+    zoomControl: true, attributionControl: true, worldCopyJump: true,
+  });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd',
+  }).addTo(map);
+  mapLayers.zones = L.layerGroup().addTo(map);
+  mapLayers.markers = L.layerGroup().addTo(map);
+}
+
+function renderMap() {
+  const ops = state.ops;
+  if (!ops) return;
+  $('hudBR').textContent = `KAVEN v${ops.version} · ${ops.date} UTC`;
+
+  if (!hasLeaflet) { renderSvgMap(ops); return; }
+  mapLayers.zones.clearLayers();
+  mapLayers.markers.clearLayers();
+
+  // watchzone rectangles
+  (ops.watchzones || []).forEach((z) => {
+    if (z.lat_min == null) return;
+    const color = z.kind === 'ais' ? '#32a467' : '#3fc6da';
+    L.rectangle([[z.lat_min, z.lon_min], [z.lat_max, z.lon_max]], {
+      color, weight: 1, dashArray: '4 4', fill: true,
+      fillColor: color, fillOpacity: z.enabled ? 0.04 : 0.01, opacity: z.enabled ? 0.7 : 0.25,
+    }).bindTooltip(
+      `<span class="mono" style="font-size:9px;letter-spacing:1px">${z.kind.toUpperCase()} ZONE${z.enabled ? '' : ' · DISABLED'}</span><br><b>${esc(z.name)}</b>`,
+      { className: 'kv-tooltip', sticky: true },
+    ).addTo(mapLayers.zones);
+  });
+
+  // region markers
+  (ops.regions || []).forEach((r) => {
+    if (r.code === 'global') return;
+    const s = sevOf(r.severity);
+    const active = r.event_count > 0;
+    if (r.severity >= 4) {
+      const icon = L.divIcon({
+        className: '', iconSize: [16, 16],
+        html: `<div class="pulse-marker" style="width:16px;height:16px;color:${s.c}"><span class="ring"></span></div>`,
+      });
+      L.marker([r.lat, r.lng], { icon, interactive: false }).addTo(mapLayers.markers);
     }
+    const m = L.circleMarker([r.lat, r.lng], {
+      radius: active ? 5 + r.severity * 1.6 : 3.5,
+      color: s.c, weight: 1.5,
+      fillColor: s.c, fillOpacity: active ? 0.5 : 0.12, opacity: active ? 0.95 : 0.4,
+    });
+    m.bindTooltip(
+      `<span class="mono" style="font-size:9px;letter-spacing:1px;color:${s.c}">SEV ${r.severity} · ${r.event_count} EVT</span><br><b>${esc(r.name)}</b>`,
+      { className: 'kv-tooltip', direction: 'top', offset: [0, -6] },
+    );
+    m.on('click', () => selectRegion(r.code, false));
+    m.addTo(mapLayers.markers);
+  });
+}
 
-    async function loadRegionDetail(region) {
-      document.getElementById('guideOverview').style.display = 'none';
-      const detail = document.getElementById('guideDetail');
-      detail.classList.add('active');
+/* offline SVG fallback — graticule + zones + region dots */
+function renderSvgMap(ops) {
+  const X = (lng) => (lng + 180) / 360 * 1000;
+  const Y = (lat) => (90 - lat) / 180 * 500;
+  let g = '';
+  for (let lng = -150; lng <= 150; lng += 30) g += `<line x1="${X(lng)}" y1="0" x2="${X(lng)}" y2="500" stroke="#1c232c"/>`;
+  for (let lat = -60; lat <= 60; lat += 30) g += `<line x1="0" y1="${Y(lat)}" x2="1000" y2="${Y(lat)}" stroke="#1c232c"/>`;
+  let z = '';
+  (ops.watchzones || []).forEach((w) => {
+    if (w.lat_min == null) return;
+    const color = w.kind === 'ais' ? '#32a467' : '#3fc6da';
+    z += `<rect x="${X(w.lon_min)}" y="${Y(w.lat_max)}" width="${X(w.lon_max) - X(w.lon_min)}" height="${Y(w.lat_min) - Y(w.lat_max)}"
+      fill="${color}" fill-opacity="0.05" stroke="${color}" stroke-opacity="${w.enabled ? 0.7 : 0.25}" stroke-dasharray="3 3"/>`;
+  });
+  let mks = '';
+  (ops.regions || []).forEach((r) => {
+    if (r.code === 'global') return;
+    const s = sevOf(r.severity);
+    const rad = r.event_count > 0 ? 4 + r.severity * 1.5 : 2.5;
+    mks += `<circle cx="${X(r.lng)}" cy="${Y(r.lat)}" r="${rad}" fill="${s.c}" fill-opacity="0.5" stroke="${s.c}"
+      style="cursor:pointer" data-region="${r.code}"><title>${esc(r.name)} · SEV ${r.severity}</title></circle>`;
+  });
+  $('map').innerHTML = `<svg id="svgMap" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet">${g}${z}${mks}</svg>
+    <div class="offline-note" style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%)">OFFLINE GRID MODE — MAP TILES UNAVAILABLE</div>`;
+  $('map').querySelectorAll('circle[data-region]').forEach((c) =>
+    c.addEventListener('click', () => selectRegion(c.dataset.region, false)));
+}
 
+/* ═══════════ timeline ═══════════ */
+function renderTimeline() {
+  const ops = state.ops;
+  const track = $('tlTrack');
+  if (!ops) return;
+  $('tlDate').textContent = ops.date;
+  $('tlCount').textContent = `${ops.events.length} EVENTS`;
+  let html = '';
+  for (let h = 0; h <= 24; h += 3) {
+    html += `<div class="tl-tick" style="left:${h / 24 * 100}%"><span>${String(h).padStart(2, '0')}</span></div>`;
+  }
+  ops.events.forEach((e) => {
+    const t = (e.time || '').slice(11, 19);
+    if (!t) return;
+    const [hh, mm] = t.split(':').map(Number);
+    const pct = ((hh * 60 + (mm || 0)) / 1440) * 100;
+    const s = sevOf(e.severity);
+    const jitter = (parseInt(e.id?.slice(0, 2) || '0', 16) % 26) - 13;
+    html += `<div class="tl-dot ${state.selected?.id === e.id ? 'selected' : ''}" data-id="${e.id}"
+      style="left:${pct}%;background:${s.c};color:${s.c};margin-top:${jitter}px" title="${esc(e.event.slice(0, 90))}"></div>`;
+  });
+  track.innerHTML = html;
+  track.querySelectorAll('.tl-dot').forEach((d) =>
+    d.addEventListener('click', () => selectEvent(d.dataset.id)));
+}
+
+/* ═══════════ threatcon / topbar ═══════════ */
+function renderTopbar() {
+  const ops = state.ops;
+  if (!ops) return;
+  const lvl = ops.threat_level | 0;
+  const s = sevOf(lvl);
+  $('tcLabel').textContent = `${lvl} · ${THREATCON[lvl]}`;
+  $('tcLabel').style.color = s.c;
+  $('tcBars').innerHTML = [1, 2, 3, 4, 5].map((i) =>
+    `<i style="height:${3 + i * 2}px;${i <= lvl ? `background:${s.c}` : ''}"></i>`).join('');
+  $('tbTotals').innerHTML =
+    `RUNS <b>${ops.totals.runs}</b> · EVENTS <b>${ops.totals.events}</b> · UNIQUE <b>${ops.totals.unique_events}</b>`;
+  $('wlDate').textContent = ops.date;
+}
+
+/* ═══════════ watchlist (left) ═══════════ */
+function renderWatchlist() {
+  const ops = state.ops;
+  if (!ops) return;
+  $('aoList').innerHTML = ops.regions.map((r) => {
+    const s = sevOf(r.severity);
+    return `<div class="ao-row ${state.selected?.type === 'region' && state.selected.code === r.code ? 'selected' : ''}" data-code="${r.code}">
+      <div class="top">
+        <span class="nm">${esc(r.name)}</span>
+        ${sevChip(r.severity)}
+      </div>
+      <div class="meta">
+        <span class="code">${esc(r.code)}</span>
+        <div class="ao-bar"><i style="width:${r.severity * 20}%;background:${s.c}"></i></div>
+        <span class="mono" style="font-size:9.5px;color:var(--dim)">${r.event_count} EVT</span>
+      </div>
+    </div>`;
+  }).join('');
+  $('aoList').querySelectorAll('.ao-row').forEach((row) =>
+    row.addEventListener('click', () => selectRegion(row.dataset.code, true)));
+
+  $('assetList').innerHTML = (ops.assets.length ? ops.assets : []).map((a) => {
+    const s = sevOf(a.max_severity);
+    return `<div class="asset-row">
+      <span class="nm"><span style="color:${s.c};margin-right:7px">●</span>${esc(a.name)}</span>
+      <span class="ct">${a.count} EVT · S${a.max_severity}</span>
+    </div>`;
+  }).join('') || '<div class="offline-note">NO ASSET IMPACT TODAY</div>';
+}
+
+/* ═══════════ feed ═══════════ */
+function feedFilters() {
+  return {
+    sev: Number($('fSev').value || 0),
+    cat: $('fCat').value,
+    sig: $('fSig').value,
+    q: $('fQuery').value.trim().toLowerCase(),
+  };
+}
+function renderFeed() {
+  const ops = state.ops;
+  if (!ops) return;
+  const f = feedFilters();
+  const rows = ops.events.filter((e) => {
+    if (f.sev === 5 ? e.severity !== 5 : e.severity < f.sev) return false;
+    if (f.cat && e.category !== f.cat) return false;
+    if (f.sig && e.signal !== f.sig) return false;
+    if (f.q && !JSON.stringify(e).toLowerCase().includes(f.q)) return false;
+    return true;
+  });
+  $('fCount').textContent = `${rows.length} / ${ops.events.length} EVENTS`;
+  $('feedBody').innerHTML = rows.map((e) => `
+    <tr data-id="${e.id}" class="${state.selected?.id === e.id ? 'selected' : ''}">
+      <td class="mono" style="color:var(--dim)">${esc((e.time || '').slice(11, 16) || '--:--')}</td>
+      <td>${sevChip(e.severity)}</td>
+      <td style="color:var(--muted)">${esc(e.region_name)}</td>
+      <td class="mono" style="font-size:10px;color:var(--dim)">${esc(CAT_LABEL[e.category] || e.category)}</td>
+      <td>${esc(e.event)}</td>
+      <td>${sigChip(e.signal)}</td>
+      <td style="font-size:11px;color:var(--dim)">${(e.affected_assets || []).map(esc).join(', ')}</td>
+    </tr>`).join('') || '<tr><td colspan="7" class="offline-note">NO EVENTS MATCH FILTER</td></tr>';
+  $('feedBody').querySelectorAll('tr[data-id]').forEach((tr) =>
+    tr.addEventListener('click', () => selectEvent(tr.dataset.id)));
+}
+['fSev', 'fCat', 'fSig'].forEach((id) => $(id).addEventListener('change', renderFeed));
+$('fQuery').addEventListener('input', renderFeed);
+
+function populateFeedFilters() {
+  const cats = [...new Set(state.ops.events.map((e) => e.category))].sort();
+  const sigs = [...new Set(state.ops.events.map((e) => e.signal))].sort();
+  const keep = (sel, opts, label) => {
+    const cur = sel.value;
+    sel.innerHTML = `<option value="">${label}: ALL</option>` + opts.map((o) => `<option>${esc(o)}</option>`).join('');
+    sel.value = cur;
+  };
+  keep($('fCat'), cats, 'CATEGORY');
+  keep($('fSig'), sigs, 'SIGNAL');
+}
+
+/* ═══════════ selection & inspector ═══════════ */
+function clearSelection() {
+  state.selected = null;
+  $('inspBand').style.background = 'transparent';
+  $('inspBody').innerHTML = '<div class="insp-empty">NO OBJECT SELECTED<br/><br/>SELECT AN EVENT, REGION<br/>OR TIMELINE MARKER</div>';
+  renderWatchlist(); renderTimeline(); renderFeed();
+}
+$('inspClear').addEventListener('click', clearSelection);
+
+function selectEvent(id) {
+  const e = state.ops?.events.find((x) => x.id === id);
+  if (!e) return;
+  state.selected = { type: 'event', id };
+  renderWatchlist(); renderTimeline(); renderFeed();
+  const s = sevOf(e.severity);
+  $('inspBand').style.background = s.c;
+  $('inspBody').innerHTML = `
+    <div class="insp-sec">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        ${sevChip(e.severity)}
+        <span class="mono" style="font-size:9px;letter-spacing:1.5px;color:${s.c}">${s.label}</span>
+        <span class="mono" style="font-size:9px;color:var(--dim);margin-left:auto">#${e.id}</span>
+      </div>
+      <div class="insp-title">${esc(e.event)}</div>
+    </div>
+    <div class="insp-sec"><div class="kv">
+      <span class="k">Time</span><span class="v mono">${esc(e.time || 'N/A')}</span>
+      <span class="k">Region</span><span class="v">${esc(e.region_name)} <span class="mono" style="color:var(--dim);font-size:9px">${esc(e.region)}</span></span>
+      <span class="k">Category</span><span class="v mono">${esc(CAT_LABEL[e.category] || e.category)}</span>
+      <span class="k">Signal</span><span class="v">${sigChip(e.signal)}</span>
+      ${e.confidence != null ? `<span class="k">Confidence</span><span class="v mono">${esc(String(e.confidence))}</span>` : ''}
+    </div></div>
+    ${(e.affected_assets || []).length ? `<div class="insp-sec">
+      <div class="k mono" style="font-size:9px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase;margin-bottom:7px">Affected Assets</div>
+      <div class="chips">${e.affected_assets.map((a) => `<span class="chip">${esc(a)}</span>`).join('')}</div>
+    </div>` : ''}
+    ${e.reasoning ? `<div class="insp-sec">
+      <div class="k mono" style="font-size:9px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase;margin-bottom:7px">Analyst Reasoning</div>
+      <div class="insp-block">${esc(e.reasoning)}</div>
+    </div>` : ''}
+    ${e.source_url ? `<div class="insp-sec">
+      <div class="k mono" style="font-size:9px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase;margin-bottom:7px">Source</div>
+      <a class="src-link" href="${esc(e.source_url)}" target="_blank" rel="noopener">${esc(e.source_url)}</a>
+    </div>` : ''}
+    <div class="insp-sec">
+      <button class="btn" id="inspLocate">◎ Locate on map</button>
+      <button class="btn" id="inspRegion" style="margin-left:6px">Region dossier →</button>
+    </div>`;
+  $('inspLocate')?.addEventListener('click', () => {
+    switchView('cop');
+    if (map && e.lat != null) map.flyTo([e.lat, e.lng], 5, { duration: 0.8 });
+  });
+  $('inspRegion')?.addEventListener('click', () => selectRegion(e.region, false));
+}
+
+async function selectRegion(code, fly) {
+  const r = state.ops?.regions.find((x) => x.code === code);
+  if (!r) return;
+  state.selected = { type: 'region', code };
+  renderWatchlist(); renderTimeline(); renderFeed();
+  if (fly && map && state.view === 'cop' && r.code !== 'global') map.flyTo([r.lat, r.lng], 5, { duration: 0.8 });
+  const s = sevOf(r.severity);
+  const events = state.ops.events.filter((e) => e.region === code);
+  $('inspBand').style.background = s.c;
+  $('inspBody').innerHTML = `
+    <div class="insp-sec">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        ${sevChip(r.severity)}
+        <span class="mono" style="font-size:9px;letter-spacing:1.5px;color:${s.c}">${s.label}</span>
+        <span class="mono" style="font-size:9px;color:var(--dim);margin-left:auto">AO/${esc(code.toUpperCase())}</span>
+      </div>
+      <div class="insp-title">${esc(r.name)}</div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:7px;line-height:1.6">${esc(r.description)}</div>
+    </div>
+    <div class="insp-sec"><div class="kv">
+      <span class="k">Coordinates</span><span class="v mono">${r.lat}, ${r.lng}</span>
+      <span class="k">Events today</span><span class="v mono">${r.event_count}</span>
+    </div></div>
+    <div class="insp-sec">
+      <div class="k mono" style="font-size:9px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase;margin-bottom:8px">7-Day Severity</div>
+      <div class="spark" id="inspSpark"><span class="offline-note">LOADING…</span></div>
+    </div>
+    <div class="insp-sec">
+      <div class="k mono" style="font-size:9px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase;margin-bottom:8px">Today's Events (${events.length})</div>
+      ${events.map((e) => `<div class="insp-ev" data-id="${e.id}" style="border-left-color:${sevOf(e.severity).c}">
+        ${sevChip(e.severity)} <span style="margin-left:4px">${esc(e.event)}</span>
+      </div>`).join('') || '<div class="offline-note" style="padding:0">NO EVENTS TODAY</div>'}
+    </div>`;
+  $('inspBody').querySelectorAll('.insp-ev').forEach((d) =>
+    d.addEventListener('click', () => selectEvent(d.dataset.id)));
+
+  // 7-day sparkline via /guide/{region}
+  try {
+    let hist = state.regionHistoryCache[code];
+    if (!hist) {
+      const res = await fetch(`${API}/guide/${code}?days=7`);
+      if (res.ok) { hist = (await res.json()).history || []; state.regionHistoryCache[code] = hist; }
+    }
+    const spark = $('inspSpark');
+    if (spark && hist) {
+      spark.innerHTML = hist.map((h) => {
+        const hs = sevOf(h.max_severity);
+        return `<div class="col" title="${h.date} · SEV ${h.max_severity} · ${h.event_count} EVT">
+          <div class="bar" style="height:${Math.max(4, h.max_severity * 20)}%;background:${hs.c}"></div>
+          <span class="dt">${h.date.slice(8)}</span>
+        </div>`;
+      }).join('');
+    }
+  } catch (_) { /* offline */ }
+}
+
+/* ═══════════ intel report ═══════════ */
+let reportDatesLoaded = false;
+async function loadReportDates() {
+  if (reportDatesLoaded) return;
+  try {
+    const res = await fetch(`${API}/report/dates`);
+    const data = await res.json();
+    const sel = $('reportDate');
+    sel.innerHTML = (data.dates || []).map((d) =>
+      `<option value="${d}">${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}</option>`).join('');
+    reportDatesLoaded = true;
+    if (data.dates?.length) loadReport(data.dates[0]);
+    else $('intelMd').textContent = 'NO REPORT DATA AVAILABLE';
+  } catch (_) { $('intelMd').textContent = 'REPORT API UNAVAILABLE'; }
+}
+$('loadReportBtn').addEventListener('click', () => loadReport($('reportDate').value));
+
+async function loadReport(date) {
+  if (!date) return;
+  try {
+    const res = await fetch(`${API}/report/${date}`);
+    if (!res.ok) { $('intelMd').textContent = 'NO DATA FOR THIS DATE'; $('intelStats').innerHTML = ''; return; }
+    const d = await res.json();
+    const s = sevOf(d.max_severity);
+    $('intelStats').innerHTML = `
+      <div class="stat-card"><div class="lb">Date</div><div class="vl">${d.date}</div></div>
+      <div class="stat-card"><div class="lb">Threat Level</div><div class="vl" style="color:${s.c}">S${d.max_severity} ${s.label}</div></div>
+      <div class="stat-card"><div class="lb">Unique Events</div><div class="vl">${d.unique_events}</div></div>
+      <div class="stat-card"><div class="lb">Runs</div><div class="vl">${d.total_runs}</div></div>`;
+    $('intelMd').innerHTML = mdToHtml(d.markdown || '');
+  } catch (_) { $('intelMd').textContent = 'ERROR LOADING REPORT'; }
+}
+
+/* minimal markdown renderer (headers, bold, code, hr, lists) */
+function mdToHtml(md) {
+  const lines = esc(md).split('\n');
+  let out = '', inList = false;
+  for (const line of lines) {
+    let l = line;
+    if (/^\s*-\s+/.test(l)) {
+      if (!inList) { out += '<ul>'; inList = true; }
+      out += `<li>${inline(l.replace(/^\s*-\s+/, ''))}</li>`;
+      continue;
+    }
+    if (inList) { out += '</ul>'; inList = false; }
+    if (/^---/.test(l)) { out += '<hr/>'; continue; }
+    if (/^### /.test(l)) { out += `<h3>${inline(l.slice(4))}</h3>`; continue; }
+    if (/^## /.test(l)) { out += `<h2>${inline(l.slice(3))}</h2>`; continue; }
+    if (/^# /.test(l)) { out += `<h1>${inline(l.slice(2))}</h1>`; continue; }
+    if (l.trim() === '') { out += '<div style="height:6px"></div>'; continue; }
+    out += `<div>${inline(l)}</div>`;
+  }
+  if (inList) out += '</ul>';
+  return out;
+  function inline(s) {
+    return s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>');
+  }
+}
+
+/* ═══════════ assets view ═══════════ */
+async function loadAssets() {
+  try {
+    const res = await fetch(`${API}/portfolio?days=7`);
+    const data = await res.json();
+    const assets = data.assets || [];
+    const totalEvents = assets.reduce((s, a) => s + a.total_events, 0);
+    const maxSev = assets.length ? Math.max(...assets.map((a) => a.max_severity)) : 0;
+    const s = sevOf(maxSev);
+    $('assetsStats').innerHTML = `
+      <div class="stat-card"><div class="lb">Tracked Assets</div><div class="vl">${assets.length}</div></div>
+      <div class="stat-card"><div class="lb">Total Mentions</div><div class="vl">${totalEvents}</div></div>
+      <div class="stat-card"><div class="lb">Peak Severity</div><div class="vl" style="color:${s.c}">S${maxSev} ${s.label}</div></div>`;
+    $('assetsGrid').innerHTML = assets.map((a) => {
+      const heat = (a.history || []).map((h) => {
+        const hs = sevOf(h.max_severity);
+        return `<div class="hm-cell" style="background:${h.max_severity ? hs.c : '#232b35'};opacity:${h.max_severity ? 0.85 : 1}"
+          data-tip="${h.date} · S${h.max_severity} · ${h.event_count} EVT"></div>`;
+      }).join('');
+      return `<div class="a-card">
+        <div class="hd">
+          <span><span class="nm">${esc(a.name)}</span><span class="tp">${esc(a.type)}</span></span>
+          ${sigChip(a.dominant_signal)}
+        </div>
+        <div class="ds">${esc(a.description)}</div>
+        <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--dim);margin-bottom:6px">
+          <span>${a.total_events} EVENTS</span><span>PEAK ${sevChip(a.max_severity)}</span>
+        </div>
+        <div class="hm-row">${heat}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:6px;letter-spacing:1px">
+          ${Object.entries(a.signals || {}).map(([k, v]) => `${k.toUpperCase()}:${v}`).join(' · ') || ''}
+        </div>
+      </div>`;
+    }).join('') || '<div class="offline-note">NO ASSET DATA</div>';
+  } catch (_) { $('assetsGrid').innerHTML = '<div class="offline-note">PORTFOLIO API UNAVAILABLE</div>'; }
+}
+
+/* ═══════════ system view ═══════════ */
+async function loadSystem() {
+  const wrap = $('sysWrap');
+  try {
+    const [health, cfg] = await Promise.all([
+      fetch(`${API}/health`).then((r) => r.json()),
+      fetch(`${API}/config`).then((r) => r.json()),
+    ]);
+    const secTitle = { ais_zones: 'AIS WATCHZONES (MARITIME)', adsb_zones: 'ADS-B WATCHZONES (AIR)', news_feeds: 'NEWS FEEDS', news_keywords: 'NEWS KEYWORDS', social_keywords: 'SOCIAL KEYWORDS' };
+    let html = `<div class="sys-sec"><div class="hd"><span>SERVICE STATUS</span>
+      <span style="color:var(--green)">● ${esc(health.status).toUpperCase()} · v${esc(health.version)}</span></div>
+      <div style="padding:10px 12px" class="mono" style="font-size:11px">
+        <span style="color:var(--dim)">API</span> ${esc(API)}</div></div>`;
+    for (const [key, sec] of Object.entries(cfg)) {
+      html += `<div class="sys-sec"><div class="hd"><span>${secTitle[key] || key.toUpperCase()}</span>
+        <span>${sec.enabled} ACTIVE / ${sec.total}</span></div>
+        <table class="grid-table"><tbody>` +
+        sec.items.map((it) => {
+          const en = it.enabled !== false;
+          const detail = it.url ? esc(it.url) : it.query ? `"${esc(it.query)}"`
+            : it.lat_min != null ? `${it.lat_min}°–${it.lat_max}°N · ${it.lon_min}°–${it.lon_max}°E` : '';
+          return `<tr style="cursor:default"><td style="width:220px">
+            <span class="en-dot" style="background:${en ? 'var(--green)' : '#333d4a'}"></span>${esc(it.name || it.id)}</td>
+            <td class="mono" style="font-size:10.5px;color:var(--dim)">${detail}</td>
+            <td class="mono" style="width:80px;font-size:9px;letter-spacing:1px;color:${en ? 'var(--green)' : 'var(--dim)'}">${en ? 'ACTIVE' : 'DISABLED'}</td></tr>`;
+        }).join('') + '</tbody></table></div>';
+    }
+    wrap.innerHTML = html;
+  } catch (_) { wrap.innerHTML = '<div class="offline-note">CONFIG API UNAVAILABLE — START BACKEND: uvicorn webapp.backend.app:app --port 8000</div>'; }
+}
+
+/* ═══════════ command palette ═══════════ */
+const VIEWS = [
+  { tag: 'VIEW', label: 'Common Operating Picture', run: () => switchView('cop') },
+  { tag: 'VIEW', label: 'Event Feed', run: () => switchView('feed') },
+  { tag: 'VIEW', label: 'Intel Report', run: () => switchView('intel') },
+  { tag: 'VIEW', label: 'Asset Impact', run: () => switchView('assets') },
+  { tag: 'VIEW', label: 'System / Collection', run: () => switchView('system') },
+  { tag: 'ACTION', label: 'Run collection now', run: () => $('runBtn').click() },
+  { tag: 'ACTION', label: 'Toggle live stream', run: () => $('liveDot').click() },
+];
+let palIdx = 0, palItems = [];
+
+function paletteSearch(q) {
+  q = q.trim().toLowerCase();
+  const out = [];
+  const push = (item) => { if (out.length < 14) out.push(item); };
+  if (q.startsWith('>')) {
+    const qq = q.slice(1).trim();
+    VIEWS.filter((v) => v.label.toLowerCase().includes(qq)).forEach(push);
+    return out;
+  }
+  VIEWS.filter((v) => q && v.label.toLowerCase().includes(q)).forEach(push);
+  const ops = state.ops;
+  if (!ops) return out;
+  ops.regions.filter((r) => !q || r.name.toLowerCase().includes(q) || r.code.includes(q))
+    .forEach((r) => push({ tag: 'REGION', label: `${r.name} · S${r.severity} · ${r.event_count} EVT`, run: () => { switchView('cop'); selectRegion(r.code, true); } }));
+  ops.assets.filter((a) => q && a.name.toLowerCase().includes(q))
+    .forEach((a) => push({ tag: 'ASSET', label: `${a.name} · ${a.count} EVT`, run: () => switchView('assets') }));
+  if (q) {
+    ops.events.filter((e) => e.event.toLowerCase().includes(q))
+      .forEach((e) => push({ tag: `SEV ${e.severity}`, label: e.event, run: () => { selectEvent(e.id); } }));
+  }
+  return out;
+}
+
+function renderPalette() {
+  const q = $('paletteInput').value;
+  palItems = paletteSearch(q);
+  palIdx = Math.min(palIdx, Math.max(0, palItems.length - 1));
+  $('paletteResults').innerHTML = palItems.map((it, i) =>
+    `<div class="pal-item ${i === palIdx ? 'active' : ''}" data-i="${i}">
+      <span class="tag">${esc(it.tag)}</span><span class="lbl">${esc(it.label)}</span>
+    </div>`).join('') || '<div class="offline-note">NO MATCHES</div>';
+  $('paletteResults').querySelectorAll('.pal-item').forEach((el) => {
+    el.addEventListener('mouseenter', () => { palIdx = Number(el.dataset.i); renderPalette(); });
+    el.addEventListener('click', () => runPalette(Number(el.dataset.i)));
+  });
+}
+function openPalette() { $('paletteOverlay').classList.add('open'); $('paletteInput').value = ''; palIdx = 0; renderPalette(); $('paletteInput').focus(); }
+function closePalette() { $('paletteOverlay').classList.remove('open'); }
+function runPalette(i) { const it = palItems[i]; if (it) { closePalette(); it.run(); } }
+
+$('searchBtn').addEventListener('click', openPalette);
+$('paletteInput').addEventListener('input', () => { palIdx = 0; renderPalette(); });
+$('paletteOverlay').addEventListener('click', (e) => { if (e.target === $('paletteOverlay')) closePalette(); });
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); return; }
+  if (e.key === '/' && !$('paletteOverlay').classList.contains('open') &&
+      !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) { e.preventDefault(); openPalette(); return; }
+  if (!$('paletteOverlay').classList.contains('open')) return;
+  if (e.key === 'Escape') closePalette();
+  if (e.key === 'ArrowDown') { e.preventDefault(); palIdx = Math.min(palIdx + 1, palItems.length - 1); renderPalette(); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); palIdx = Math.max(palIdx - 1, 0); renderPalette(); }
+  if (e.key === 'Enter') runPalette(palIdx);
+});
+
+/* ═══════════ data loading ═══════════ */
+async function loadOps(showToast) {
+  try {
+    const res = await fetch(`${API}/ops/summary`);
+    if (!res.ok) throw new Error(res.statusText);
+    state.ops = await res.json();
+    renderTopbar(); renderWatchlist(); renderMap(); renderTimeline();
+    populateFeedFilters(); renderFeed();
+    if (showToast) toast(`OPS PICTURE UPDATED · ${state.ops.totals.unique_events} EVENTS`, 'var(--green)');
+  } catch (err) {
+    toast('OPS API UNAVAILABLE — START BACKEND ON :8000', 'var(--red)');
+    console.error(err);
+  }
+}
+
+$('runBtn').addEventListener('click', async () => {
+  const btn = $('runBtn');
+  btn.disabled = true; btn.textContent = '▸ COLLECTING…';
+  toast('COLLECTION RUN TRIGGERED');
+  try {
+    await fetch(`${API}/runs/once`, { method: 'POST' });
+    state.regionHistoryCache = {};
+    await loadOps(true);
+  } catch (_) { toast('RUN FAILED — BACKEND UNREACHABLE', 'var(--red)'); }
+  btn.disabled = false; btn.textContent = '▸ Run Collection';
+});
+
+/* SSE live stream */
+let es = null;
+$('liveDot').addEventListener('click', () => {
+  if (state.live) {
+    es?.close(); es = null; state.live = false;
+    $('liveDot').classList.remove('on');
+    toast('LIVE STREAM DISCONNECTED');
+  } else {
+    es = new EventSource(`${API}/runs/stream`);
+    es.onmessage = (ev) => {
       try {
-        const res = await fetch(`${API}/guide/${region}?days=7`);
-        const data = await res.json();
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'run_update') {
+          state.regionHistoryCache = {};
+          loadOps(false);
+          toast('NEW RUN INGESTED — PICTURE REFRESHED', 'var(--blue)');
+        }
+      } catch (_) { /* heartbeat */ }
+    };
+    es.onerror = () => { /* EventSource auto-retries */ };
+    state.live = true;
+    $('liveDot').classList.add('on');
+    toast('LIVE STREAM CONNECTED');
+  }
+});
 
-        const historyBars = data.history.map(h => {
-          const height = h.max_severity ? (h.max_severity * 12) : 2;
-          const color = SEV_COLORS[h.max_severity] || SEV_COLORS[0];
-          return `<div style="flex:1;text-align:center"><div style="background:${color};height:${height}px;border-radius:3px 3px 0 0;margin:0 auto;width:80%"></div><div style="font-size:10px;color:#484f58;margin-top:4px">${h.date.slice(5)}</div></div>`;
-        }).join('');
-
-        const events = (data.today_events||[]).map(e =>
-          `<div class="card"><span class="sev sev-${e.severity}">Lv.${e.severity}</span> ${e.event}</div>`
-        ).join('') || '<div style="color:#8b949e">No events today</div>';
-
-        document.getElementById('guideDetailContent').innerHTML = `
-          <h1>${data.name} <span class="sev sev-${data.current_severity}">Lv.${data.current_severity}</span></h1>
-          <p style="color:#8b949e;margin:8px 0">${data.description}</p>
-          <h2>7-Day Severity History</h2>
-          <div style="display:flex;align-items:flex-end;height:80px;gap:4px;margin:12px 0">${historyBars}</div>
-          <h2>Today's Events</h2>
-          ${events}
-        `;
-      } catch(e) { console.error(e); }
-    }
-
-    document.getElementById('guideBackLink').onclick = loadGuide;
-
-    // ── Portfolio ──
-
-    async function loadPortfolio() {
-      try {
-        const res = await fetch(`${API}/portfolio?days=7`);
-        const data = await res.json();
-        const assets = data.assets || [];
-
-        const totalEvents = assets.reduce((s,a) => s + a.total_events, 0);
-        const maxSev = assets.length ? Math.max(...assets.map(a=>a.max_severity)) : 0;
-
-        document.getElementById('portfolioStats').innerHTML = `
-          <div class="stat"><div class="label">Tracked Assets</div><div class="value">${assets.length}</div></div>
-          <div class="stat"><div class="label">Total Mentions</div><div class="value">${totalEvents}</div></div>
-          <div class="stat"><div class="label">Peak Severity</div><div class="value" style="color:${SEV_COLORS[maxSev]}">${SEV_EMOJI[maxSev]} Lv.${maxSev}</div></div>
-        `;
-
-        const signalClass = s => ({buy:'signal-buy',sell:'signal-sell',hedge:'signal-hedge',hold:'signal-hold'}[s]||'signal-watch');
-
-        document.getElementById('assetGrid').innerHTML = assets.map(a => {
-          const heatmap = (a.history||[]).map(h => {
-            const bg = SEV_COLORS[h.max_severity] || SEV_COLORS[0];
-            return `<div class="heatmap-cell" style="background:${bg}" data-tip="${h.date}: Lv.${h.max_severity} (${h.event_count}건)"></div>`;
-          }).join('');
-
-          const signals = Object.entries(a.signals||{}).map(([k,v]) => `${k}:${v}`).join(' ');
-
-          return `
-            <div class="card asset-card">
-              <div class="card-header">
-                <span>
-                  <span class="asset-name">${a.name}</span>
-                  <span class="asset-type">${a.type}</span>
-                </span>
-                <span class="signal-badge ${signalClass(a.dominant_signal)}">${a.dominant_signal}</span>
-              </div>
-              <div style="font-size:12px;color:#8b949e;margin:4px 0">${a.description}</div>
-              <div style="display:flex;justify-content:space-between;font-size:12px;margin:8px 0">
-                <span>이벤트 ${a.total_events}건</span>
-                <span class="sev sev-${a.max_severity}">Peak Lv.${a.max_severity}</span>
-              </div>
-              <div style="font-size:11px;color:#484f58;margin-bottom:4px">7일 히트맵 (좌=과거 → 우=오늘)</div>
-              <div class="heatmap-row">${heatmap}</div>
-              <div style="font-size:11px;color:#484f58;margin-top:6px">신호 분포: ${signals || 'N/A'}</div>
-            </div>
-          `;
-        }).join('');
-      } catch(e) { console.error(e); }
-    }
-  </script>
+/* ═══════════ boot ═══════════ */
+initMap();
+loadOps(false);
+setInterval(() => { if (!state.live) loadOps(false); }, 60000);
+</script>
 </body>
 </html>

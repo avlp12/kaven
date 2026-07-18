@@ -4,6 +4,51 @@
 
 ---
 
+## v0.0.06 — 2026-07-18
+
+### 핵심: Palantir Maven 스타일 작전 콘솔(Ops Console) UX 전면 개편
+
+`webapp/frontend/index.html`을 탭 기반 SPA에서 Maven Smart System 류의
+다중 패널 인텔리전스 콘솔로 재설계.
+
+1. **COP (Common Operating Picture)**
+   - Leaflet + CARTO 다크 타일 기반 전술 지도
+   - AIS(녹색)/ADS-B(청록) 감시구역 bounding box 오버레이 (비활성 구역은 흐리게)
+   - 지역별 severity 마커: 크기·색상 스케일, severity ≥ 4는 펄스 링 애니메이션
+   - 지도 하단 24시간 이벤트 타임라인 스트립 (UTC 축, 클릭 → 인스펙터)
+   - CDN 불가(오프라인) 시 SVG 격자 지도로 자동 폴백
+2. **3-패널 워크스페이스**
+   - 좌측 아이콘 레일: COP / Event Feed / Intel Report / Asset Impact / System
+   - 좌측 워치리스트: AO(감시 지역) severity 정렬 목록 + 영향 자산 목록
+   - 우측 인스펙터: 이벤트 상세(메타 테이블·분석 근거·출처 링크·지도 이동),
+     지역 도시에(설명·7일 severity 스파크라인·당일 이벤트 목록)
+3. **커맨드 팔레트** (`Ctrl+K` 또는 `/`)
+   - 지역·이벤트·자산·뷰·액션 통합 검색, 키보드 내비게이션
+4. **상단 커맨드 바**
+   - THREATCON 레벨(당일 최대 severity), RUNS/EVENTS/UNIQUE 카운터
+   - UTC/KST 실시간 시계, LIVE(SSE) 토글, Run Collection 버튼, 토스트 알림
+5. **백엔드**
+   - `GET /ops/summary` 신규 (`webapp/backend/ops.py::build_ops_summary`)
+     — 지역 상태 + 전체 이벤트(좌표·안정적 ID 포함) + 자산 영향 + 감시구역
+     단일 payload. `?date=YYYYMMDD` 지원.
+   - `REGION_COORDS`를 `ops.py`로 이동, `app.py`는 alias로 하위호환 유지
+6. **테스트**
+   - `tests/test_ops_summary.py` 7건 신규 (빈 날짜, 좌표/ID 부여, 지역 정렬,
+     자산 집계, dedup, watchzone 포함, 미등록 지역 안전 처리)
+
+### 운영 영향
+- Breaking change 없음: 기존 API 전부 유지, 신규 엔드포인트만 추가
+- 프론트 접속 방법 동일 (`http://127.0.0.1:8080`), API 주소는 `?api=` 쿼리로 override 가능
+- 지도 타일은 CARTO CDN 사용(브라우저에서 로드). 오프라인 환경에서는 SVG 폴백 동작
+
+### 검증 결과
+- `ruff check .` → All checks passed
+- `python3 -m pytest -q` → 34 passed, 1 failed
+  (실패 1건은 기존 `test_kaven_log_replay_integration.py` — v0.0.05 저장소 위생 작업으로
+  운영 로그 `logs/maven_20260403.jsonl`가 추적 해제되어 발생하는 기존 이슈, 본 변경과 무관)
+
+---
+
 ## v0.0.05 — 2026-07-03
 
 ### 핵심: 입력기준 중복제거(input-gating)로 알림 노이즈 제거

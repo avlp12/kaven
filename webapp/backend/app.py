@@ -14,6 +14,7 @@ from src.kaven.config_loader import load_config
 from src.kaven.kaven import LOG_DIR, run_once
 from src.kaven.report_generator import generate_daily_report
 from src.kaven.version import __version__
+from webapp.backend.ops import REGION_COORDS, build_ops_summary
 
 app = FastAPI(title="Kaven Web API", version=__version__)
 app.add_middleware(
@@ -141,6 +142,20 @@ async def stream_runs() -> StreamingResponse:
     return StreamingResponse(_stream_latest_run(), media_type="text/event-stream")
 
 
+# ── Ops Console (COP) ───────────────────────────────────────────
+
+
+@app.get("/ops/summary")
+def ops_summary(date: str | None = None) -> dict[str, Any]:
+    """
+    작전 콘솔(COP)용 통합 요약 — 지역 상태 + 전체 이벤트(좌표 포함)
+    + 자산 영향 + 감시 구역을 한 번에 반환.
+    """
+    if date is not None and (len(date) != 8 or not date.isdigit()):
+        raise HTTPException(status_code=400, detail="Date must be YYYYMMDD format")
+    return build_ops_summary(LOG_DIR, date)
+
+
 # ── Daily Report ────────────────────────────────────────────────
 
 
@@ -175,26 +190,7 @@ def list_report_dates() -> dict[str, list[str]]:
 # ── Region Guide ────────────────────────────────────────────────
 
 
-_REGION_COORDS = {
-    "hormuz": {"lat": 26.5, "lng": 56.3, "name": "호르무즈 해협",
-               "description": "세계 원유 해상 운송의 약 20%가 통과하는 전략적 요충지. 한국 원유 수입의 70%가 이 해역을 경유."},
-    "taiwan": {"lat": 23.7, "lng": 121.0, "name": "대만 해협",
-               "description": "글로벌 반도체 공급망의 핵심 지역. 대만 TSMC는 세계 파운드리의 60% 점유."},
-    "korea": {"lat": 37.5, "lng": 127.0, "name": "한반도",
-              "description": "KOSPI, 원/달러 환율에 직접적 영향을 미치는 최고 우선순위 감시 지역."},
-    "ukraine": {"lat": 48.4, "lng": 31.2, "name": "우크라이나",
-                "description": "유럽 에너지·곡물 공급에 영향. 러시아-우크라이나 분쟁 장기화."},
-    "india_pak": {"lat": 30.0, "lng": 70.0, "name": "인도·파키스탄",
-                  "description": "남아시아 핵 보유국 간 긴장. 에너지·무역 경로 교란 가능성."},
-    "southcn": {"lat": 14.0, "lng": 114.0, "name": "남중국해",
-                "description": "세계 해상 무역의 30%가 통과. 미중 해양 패권 경쟁의 핵심 지역."},
-    "redsa": {"lat": 14.0, "lng": 42.0, "name": "홍해·예멘",
-              "description": "수에즈 운하 접근 해역. 후티 반군의 선박 공격으로 국제 물류 차질."},
-    "sahel": {"lat": 15.0, "lng": 0.0, "name": "사헬",
-              "description": "서아프리카 지정학 불안정 지역. 에너지·광물 공급망 영향."},
-    "global": {"lat": 0, "lng": 0, "name": "전지구",
-               "description": "특정 지역에 국한되지 않는 글로벌 이벤트."},
-}
+_REGION_COORDS = REGION_COORDS
 
 
 def _region_history(log_dir: Path, region: str, days: int = 7) -> list[dict]:

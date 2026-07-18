@@ -4,12 +4,22 @@
 
 Kaven은 AIS/ADS-B/뉴스/소셜 데이터를 수집하고, LLM 분석 + dedup 후 텔레그램 알림/로그 저장까지 수행하는 지정학 조기경보 시스템입니다.
 
-현재 버전: **0.0.04**
+현재 버전: **0.0.06**
 
 버전 정책:
 - 모든 업데이트 시 버전을 올리고(`0.0.01`부터 시작), 릴리스 노트/알림 헤더/로그 메타데이터에 동일 버전을 표시합니다.
 
-### 최근 업데이트 (v0.0.04)
+### 최근 업데이트 (v0.0.06)
+- **Palantir 스타일 작전 콘솔(Ops Console)로 웹 UI 전면 개편** — 탭 기반 SPA를 Maven Smart System 류의 다중 패널 인텔리전스 콘솔로 재설계.
+  - **COP(Common Operating Picture)**: 다크 전술 지도(Leaflet + CARTO dark) 위에 AIS/ADS-B 감시구역 박스, 지역별 severity 마커(고심각도 펄스 링), 24시간 이벤트 타임라인 스트립. 오프라인 시 SVG 격자 지도로 자동 폴백.
+  - **3-패널 워크스페이스**: 좌측 아이콘 레일(COP/Feed/Intel/Assets/System) + AO 워치리스트 + 우측 인스펙터(이벤트 상세·지역 도시에·7일 스파크라인).
+  - **커맨드 팔레트**(`Ctrl+K` 또는 `/`): 지역·이벤트·자산·뷰 통합 검색/이동.
+  - 상단 바: THREATCON 레벨, UTC/KST 실시간 시계, LIVE(SSE) 토글, Run Collection 버튼.
+- `GET /ops/summary` API 신규 (`webapp/backend/ops.py`) — 지역 상태 + 전체 이벤트(좌표·ID 포함) + 자산 영향 + 감시구역을 단일 payload로 반환. `?date=YYYYMMDD` 지원.
+- 지역 좌표(`REGION_COORDS`)를 `webapp/backend/ops.py`로 이동해 guide/map/ops 엔드포인트가 공유.
+- 테스트: `tests/test_ops_summary.py` 7건 신규.
+
+### 이전 업데이트 (v0.0.04)
 - **감시 구역/피드/키워드 설정 파일화** — 기존에 코드에 하드코딩되어 있던 AIS·ADS-B 감시 구역, 뉴스 RSS/키워드, 소셜 검색어를 전부 `src/kaven/config.json`(선택) 로 외부화했습니다. 각 항목에 `enabled` 플래그를 두어 **선택적 활성화/비활성화** 가능.
 - `src/kaven/config_loader.py` 신규 모듈: 설정 파일 없으면 내장 기본값 fallback. `KAVEN_CONFIG` 환경변수로 경로 override.
 - `src/kaven/config.example.json` 샘플 파일 제공 (바브엘만데브, 동유럽 공역, 연합뉴스 등 `enabled:false` 예시 포함).
