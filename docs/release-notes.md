@@ -4,6 +4,59 @@
 
 ---
 
+## v0.0.07 — 2026-07-18
+
+### 핵심: AI 에이전트 연동 계층 + 코어/HTTP 전반 리팩토링
+
+1. **MCP 서버** (`src/kaven/mcp_server.py`, 신규)
+   - 외부 SDK 의존성 없는 stdio MCP 서버 (개행 구분 JSON-RPC 2.0 직접 구현)
+   - 도구 8개: `kaven_ops_summary`, `kaven_events`, `kaven_agent_context`,
+     `kaven_region`, `kaven_daily_report`, `kaven_portfolio`, `kaven_config`,
+     `kaven_run_collection`
+   - 등록: `claude mcp add kaven -- python -m src.kaven.mcp_server`
+   - heavy import(수집기 체인)는 `kaven_run_collection` 호출 시점에만 지연 로드
+2. **에이전트 REST API** (`/agent/*`, 신규)
+   - `GET /agent/manifest` — 엔드포인트/MCP 도구/스키마 어휘(지역 코드,
+     카테고리, 신호, severity 의미) 기계가독 카탈로그
+   - `GET /agent/context` — LLM 프롬프트 주입용 압축 마크다운 브리핑
+     (`date`, `max_events`, `severity_min`)
+   - `GET /agent/events` — run 중첩 없는 평탄화 이벤트 쿼리
+     (severity/지역/카테고리/신호/키워드 필터 + 중복 제거 + 좌표/ID enrichment)
+3. **전반 리팩토링 — 코어와 HTTP 계층 분리**
+   - `src/kaven/log_store.py` 신규: JSONL 로그 탐색/파싱/중복제거 단일 소스
+     (app.py·report_generator·ops에 3중복이던 로직 통합), `KAVEN_LOG_DIR` env 지원
+   - `src/kaven/regions.py` 신규: 지역 좌표/한글명/설명 + 스키마 어휘 단일 소스
+   - `src/kaven/ops_summary.py`: `webapp/backend/ops.py`에서 코어로 이동
+     (+`enrich_event` 공용화)
+   - `src/kaven/aggregates.py` 신규: 가이드/지도/포트폴리오 집계 (app.py에서 이동)
+   - `src/kaven/agent_service.py` 신규: 이벤트 쿼리·컨텍스트·매니페스트
+   - `webapp/backend/app.py` 436줄 → 40줄 (앱 조립만), 엔드포인트는
+     `webapp/backend/routers/{system,runs,ops,agent,intel,portfolio}.py`로 분리
+   - webapp import 시 수집기 의존성(feedparser 등)이 더 이상 필요 없음
+     (`run_once`는 `POST /runs/once` 호출 시점 지연 로드)
+4. **버그 수정**
+   - `/report/dates`가 `/report/{date}` 경로 파라미터에 먼저 매칭되어 항상
+     400을 반환하던 라우트 순서 버그 수정 → Intel 뷰 날짜 목록 정상화
+   - `GET /runs/dates` 신규 (로그 존재 날짜 목록)
+5. **테스트**
+   - `tests/test_log_store.py` 7건, `tests/test_agent_service.py` 6건,
+     `tests/test_mcp_server.py` 7건 신규. `test_ops_summary.py`는 이동된
+     모듈 경로로 갱신
+
+### 운영 영향
+- 기존 REST API 경로/응답 변경 없음 (신규 엔드포인트만 추가)
+- `webapp.backend.ops` 모듈은 `src.kaven.ops_summary`로 이동 (직접 import하던
+  경우에만 경로 수정 필요)
+- MCP 서버는 로그 디렉터리만 읽으므로 API 키 없이 동작 (`kaven_run_collection` 제외)
+
+### 검증 결과
+- `ruff check .` → All checks passed
+- `python3 -m pytest -q` → 54 passed, 1 failed (기존 log replay 이슈, v0.0.06 노트 참조)
+- uvicorn 구동 후 전 엔드포인트 curl 스모크 테스트 + MCP stdio 세션
+  (initialize → tools/list → tools/call) E2E 확인 + 프론트 브라우저 리그레션 확인
+
+---
+
 ## v0.0.06 — 2026-07-18
 
 ### 핵심: Palantir Maven 스타일 작전 콘솔(Ops Console) UX 전면 개편

@@ -5,19 +5,22 @@ Kaven 웹 앱. v0.0.06부터 프론트엔드는 Palantir Maven 스타일의
 
 ## 구조
 
-- `backend/app.py`: FastAPI 엔드포인트
-  - `GET /health`
-  - `GET /ops/summary` — 작전 콘솔용 통합 요약 (지역 + 이벤트 + 자산 + 감시구역, `?date=YYYYMMDD`)
-  - `GET /runs` (이벤트 리스트 + 필터), `GET /runs/latest`, `GET /runs/files`
-  - `POST /runs/once`
-  - `GET /runs/stream` (SSE)
-  - `GET /report`, `GET /report/{date}`, `GET /report/dates`
-  - `GET /guide`, `GET /guide/{region}`
-  - `GET /map/data`
-  - `GET /portfolio`, `GET /portfolio/{asset}`
-  - `GET /config`
-- `backend/ops.py`: `/ops/summary` 집계 로직 + 지역 좌표(`REGION_COORDS`)
+v0.0.07부터 webapp은 **얇은 HTTP 계층**입니다. 도메인 로직(로그 액세스, 집계,
+에이전트 서비스)은 전부 `src/kaven/`(`log_store`, `ops_summary`, `aggregates`,
+`agent_service`)에 있고, 라우터는 이를 호출만 합니다.
+
+- `backend/app.py`: 앱 조립(create_app) — CORS + 라우터 연결만 담당
+- `backend/routers/`: 도메인별 APIRouter
+  - `system.py` — `GET /health`, `GET /config`
+  - `runs.py` — `GET /runs`(+필터), `/runs/latest`, `/runs/files`, `/runs/dates`, `POST /runs/once`, `GET /runs/stream`(SSE)
+  - `ops.py` — `GET /ops/summary` (작전 콘솔용 통합 요약, `?date=YYYYMMDD`)
+  - `agent.py` — `GET /agent/manifest`, `/agent/context`, `/agent/events` (AI 에이전트 연동)
+  - `intel.py` — `GET /report`, `/report/dates`, `/report/{date}`, `/guide`, `/guide/{region}`, `/map/data`
+  - `portfolio.py` — `GET /portfolio`, `/portfolio/{asset}`
 - `frontend/index.html`: 단일 파일 Ops Console SPA (vanilla JS + Leaflet CDN)
+
+MCP 서버(stdio)는 webapp과 별개로 `python -m src.kaven.mcp_server`로 실행합니다
+(루트 README §14 참조).
 
 ## 백엔드 실행
 

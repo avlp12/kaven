@@ -1,4 +1,4 @@
-"""webapp.backend.ops build_ops_summary 단위 테스트."""
+"""src.kaven.ops_summary build_ops_summary 단위 테스트."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ sys.modules.setdefault(
 sys.modules.setdefault("analyzer", types.SimpleNamespace(analyze=None))
 sys.modules.setdefault("signal_generator", types.SimpleNamespace(process_signals=None))
 
-from webapp.backend.ops import REGION_COORDS, build_ops_summary
+from src.kaven.ops_summary import REGION_COORDS, build_ops_summary
 
 
 _TEMP_DIRS: list[TemporaryDirectory] = []  # prevent GC during test run

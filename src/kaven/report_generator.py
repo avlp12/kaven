@@ -8,12 +8,12 @@ LLM 없이 규칙 기반으로 동작하므로 API 키 없이도 리포트 생�
 
 from __future__ import annotations
 
-import json
 from collections import defaultdict
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.kaven.log_store import dedup_events, load_day_events, today_str
+from src.kaven.regions import region_name
 
 # severity 이모지 + 라벨
 _SEV = {
@@ -32,51 +32,9 @@ _CATEGORY_KO = {
     "other": "📌 기타",
 }
 
-_REGION_KO = {
-    "hormuz": "호르무즈 해협",
-    "taiwan": "대만 해협",
-    "korea": "한반도",
-    "ukraine": "우크라이나",
-    "india_pak": "인도·파키스탄",
-    "southcn": "남중국해",
-    "redsa": "홍해·예멘",
-    "sahel": "사헬",
-    "global": "전지구",
-    "other": "기타",
-}
-
-
-def _load_day_events(log_dir: Path, date_str: str) -> list[dict[str, Any]]:
-    """특정 날짜의 모든 이벤트를 로드."""
-    events: list[dict[str, Any]] = []
-    for prefix in ("kaven_", "maven_"):
-        path = log_dir / f"{prefix}{date_str}.jsonl"
-        if not path.exists():
-            continue
-        with path.open("r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    run = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                for ev in run.get("events", []):
-                    ev["_run_id"] = run.get("run_id", "")
-                    ev["_started_at"] = run.get("started_at", "")
-                    events.append(ev)
-    return events
-
-
-def _dedup_events(events: list[dict]) -> list[dict]:
-    """같은 event 텍스트(앞 60자)의 중복 제거. 가장 높은 severity만 유지."""
-    seen: dict[str, dict] = {}
-    for ev in events:
-        key = ev.get("event", "")[:60].strip().lower()
-        if key not in seen or ev.get("severity", 0) > seen[key].get("severity", 0):
-            seen[key] = ev
-    return list(seen.values())
+# 하위호환 alias — 로직은 log_store로 이동
+_load_day_events = load_day_events
+_dedup_events = dedup_events
 
 
 def generate_daily_report(log_dir: Path, date_str: str | None = None) -> dict[str, Any]:
@@ -102,7 +60,7 @@ def generate_daily_report(log_dir: Path, date_str: str | None = None) -> dict[st
         }
     """
     if date_str is None:
-        date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+        date_str = today_str()
 
     display_date = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
 
@@ -157,7 +115,7 @@ def generate_daily_report(log_dir: Path, date_str: str | None = None) -> dict[st
     region_summary = {}
     for region, evts in by_region.items():
         region_summary[region] = {
-            "name": _REGION_KO.get(region, region),
+            "name": region_name(region),
             "event_count": len(evts),
             "max_severity": max(e.get("severity", 0) for e in evts),
             "events": [{"event": e.get("event", ""), "severity": e.get("severity", 0)} for e in evts],
@@ -209,10 +167,9 @@ def _build_markdown(
         reverse=True,
     )
     for region, evts in sorted_regions:
-        region_name = _REGION_KO.get(region, region)
         region_max = max(e.get("severity", 0) for e in evts)
         region_emoji, _ = _SEV.get(region_max, ("⚪", ""))
-        lines.append(f"### {region_emoji} {region_name} (Lv.{region_max})")
+        lines.append(f"### {region_emoji} {region_name(region)} (Lv.{region_max})")
         for ev in sorted(evts, key=lambda e: -e.get("severity", 0)):
             signal = ev.get("signal", "watch")
             assets = ", ".join(ev.get("affected_assets", []))
