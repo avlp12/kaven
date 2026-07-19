@@ -14,6 +14,9 @@ from typing import Any
 
 import aiohttp
 
+from src.kaven.anthropic_auth import resolve_auth as resolve_anthropic_auth
+from src.kaven.cli_providers import available_providers, run_cli
+
 logger = logging.getLogger("kaven.analyzer")
 
 ANALYSIS_SYSTEM_PROMPT = """당신은 지정학 위험 분석가이자 투자 전략가입니다.
@@ -79,12 +82,13 @@ async def analyze(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
         logger.info("분석할 데이터 없음")
         return []
 
-    # OpenAI 호환 API(로컬 LLM 포함) 우선, Gemini/Anthropic 순으로 폴백
+    # OpenAI 호환 API(로컬 LLM 포함) 우선, Gemini/Anthropic 순으로 폴백.
+    # Anthropic은 API 키 외에 구독(OAuth) 자격증명도 지원 (anthropic_auth 참조).
     openai_base_url = os.getenv("OPENAI_BASE_URL", "").strip().rstrip("/")
     openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
     openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
     gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    anthropic_auth = resolve_anthropic_auth()
 
     result = None
     if openai_base_url:
@@ -104,11 +108,19 @@ async def analyze(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
         except Exception as e:
             logger.warning(f"Gemini API 분석 실패: {e}")
 
-    if result is None and anthropic_key:
+    if result is None and anthropic_auth:
+        mode, auth_headers = anthropic_auth
         try:
-            result = await _call_anthropic_direct(anthropic_key, summary)
+            result = await _call_anthropic_direct(auth_headers, summary)
         except Exception as e:
-            logger.error(f"Anthropic 직접 API 분석 실패: {e}")
+            logger.error(f"Anthropic API 분석 실패 (인증: {mode}): {e}")
+
+    if result is None:
+        # 구독형 CLI 브리지 (claude/codex/cursor-agent/gemini 등 — 설치·로그인된 것)
+        try:
+            result = await _call_cli_providers(summary)
+        except Exception as e:
+            logger.warning(f"CLI 브리지 분석 실패: {e}")
 
     if result is None:
         logger.error("모든 분석 경로 실패")
@@ -344,12 +356,21 @@ async def _call_openclaw_gateway(gateway_url: str, summary: str) -> list[dict] |
     return _parse_analysis_response(text)
 
 
-async def _call_anthropic_direct(api_key: str, summary: str) -> list[dict] | None:
-    """Anthropic API 직접 호출."""
-    url = "https://api.anthropic.com/v1/messages"
+async def _call_anthropic_direct(auth_headers: dict[str, str], summary: str) -> list[dict] | None:
+    """Anthropic(호환) API 직접 호출.
+
+    - 인증: API 키(x-api-key) 또는 구독 OAuth(Bearer) — anthropic_auth가 해석
+    - ANTHROPIC_BASE_URL: 지푸 GLM/Kimi 등 구독 플랜의 Anthropic 호환
+      엔드포인트로 교체 가능 (기본 https://api.anthropic.com)
+    - ANTHROPIC_MODEL: 모델 override (기본 claude-sonnet-5)
+    """
+    base_url = os.getenv("ANTHROPIC_BASE_URL", "").strip().rstrip("/") \
+        or "https://api.anthropic.com"
+    url = f"{base_url}/v1/messages"
+    model = os.getenv("ANTHROPIC_MODEL", "").strip() or "claude-sonnet-5"
 
     payload = {
-        "model": "claude-sonnet-4-20250514",
+        "model": model,
         "max_tokens": 2000,
         "system": ANALYSIS_SYSTEM_PROMPT,
         "messages": [
@@ -362,8 +383,8 @@ async def _call_anthropic_direct(api_key: str, summary: str) -> list[dict] | Non
 
     headers = {
         "Content-Type": "application/json",
-        "x-api-key": api_key,
         "anthropic-version": "2023-06-01",
+        **auth_headers,
     }
 
     async with aiohttp.ClientSession() as session:
@@ -384,6 +405,35 @@ async def _call_anthropic_direct(api_key: str, summary: str) -> list[dict] | Non
             text += block.get("text", "")
 
     return _parse_analysis_response(text)
+
+
+async def _call_cli_providers(summary: str) -> list[dict] | None:
+    """구독형 CLI 브리지 — 설치·활성화된 에이전트 CLI에 분석 위임.
+
+    Claude Code(`claude`), Codex(`codex`), Cursor(`cursor-agent`),
+    Gemini(`gemini`) 등 각 CLI에 로그인된 구독 자격증명을 그대로 활용한다.
+    첫 번째로 파싱 가능한 결과를 반환.
+    """
+    providers = available_providers()
+    if not providers:
+        return None
+    prompt = (
+        f"{ANALYSIS_SYSTEM_PROMPT}\n\n"
+        f"{ANALYSIS_USER_PROMPT.format(collected_data=summary)}"
+    )
+    for provider in providers:
+        pid = provider.get("id", "?")
+        text = await run_cli(provider, prompt)
+        if not text:
+            continue
+        events = _parse_analysis_response(text)
+        if events:
+            logger.info(f"CLI 브리지({pid}) 분석 성공: {len(events)}건")
+            return events
+        if "[]" in text.replace(" ", ""):  # 명시적 빈 배열 = 이벤트 없음 (파싱 실패와 구분)
+            logger.info(f"CLI 브리지({pid}): 이벤트 없음")
+            return []
+    return None
 
 
 def _parse_analysis_response(text: str) -> list[dict]:

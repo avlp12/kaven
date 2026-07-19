@@ -178,5 +178,5 @@ def test_section_validators():
     # 편집 가능 섹션 화이트리스트
     assert set(EDITABLE_SECTIONS) == {
         "assets", "regions", "ais_zones", "adsb_zones",
-        "news_feeds", "news_keywords", "social_keywords",
+        "news_feeds", "news_keywords", "social_keywords", "cli_providers",
     }
