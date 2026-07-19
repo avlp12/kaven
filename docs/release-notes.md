@@ -4,6 +4,42 @@
 
 ---
 
+## v0.0.12 — 2026-07-19
+
+### 핵심: Settings 뷰 신설 — 추적 자산 커스터마이징 + 한국어/영어 전환
+
+1. **추적 자산 커스터마이징**
+   - `config.json`에 `assets` 섹션 신설 (기본값 내장: WTI/KOSPI/원달러 등 8종)
+   - `src/kaven/config_loader.py`: `DEFAULT_ASSETS`, `get_assets()`,
+     `update_config_section()` (특정 섹션만 갱신, 다른 override 보존)
+   - `aggregates.asset_meta()`: 하드코딩 `ASSET_META` 상수 → 설정 기반 로드
+   - `enabled: false` 자산은 포트폴리오/ops 집계에서 제외,
+     미등록 자산은 기존처럼 `type: other`로 표시
+   - `PUT /config/assets` 신설 (검증: 이름 필수/중복 금지, 유형 화이트리스트,
+     최대 100개) — Settings 뷰의 저장 버튼이 사용
+2. **언어 전환 (한국어/English)**
+   - `regions.py`에 `name_en`/`description_en` 병기, ops/guide payload에 포함
+   - 프론트 i18n 딕셔너리: 지역명·설명, 도움말 오버레이, 툴팁, 설정 라벨 전환
+     (콘솔 mono 크롬은 디자인상 양쪽 모두 영문 유지, Intel 리포트는 한국어)
+   - 커맨드 팔레트 "Toggle language" 액션, localStorage 지속
+3. **Settings 뷰** (단축키 `6`, 레일 아이콘 신설)
+   - 언어 선택 버튼, 추적 자산 편집기(추가/삭제/이름/유형/설명/on-off 체크),
+     저장 시 토스트 + 워치리스트/집계 즉시 갱신, API 엔드포인트 안내
+4. **테스트**: `tests/test_asset_config.py` 6건 신규 (기본값 로드, 섹션 갱신
+   round-trip + 타 섹션 보존, 커스텀 메타 반영, 비활성 자산 집계 제외,
+   지역 영문 메타, /config 노출)
+
+### 운영 영향
+- Breaking change 없음 — `assets` 미설정 시 기존과 동일한 기본 자산 메타 사용
+- `PUT /config/assets`는 `KAVEN_CONFIG`(기본 `src/kaven/config.json`)에 기록
+
+### 검증 결과
+- `ruff check .` → All checks passed / `pytest` → 64 passed (기존 실패 1건 동일)
+- 브라우저 E2E: Settings 뷰 렌더링(기본 8종), EN 전환 시 워치리스트·인스펙터
+  영문 표시, 자산 추가+저장 토스트, 새로고침 후 언어 유지, 콘솔 에러 0
+
+---
+
 ## v0.0.11 — 2026-07-19
 
 ### 핵심: 내장 벡터 월드맵 — COP 지도의 외부 의존성 제거

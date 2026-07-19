@@ -360,6 +360,16 @@
     .insp-nav { cursor: pointer; color: var(--dim); padding: 0 5px; letter-spacing: 0; }
     .insp-nav:hover { color: var(--blue); }
 
+    /* settings view */
+    .cfg-input, .cfg-select {
+      background: var(--bg2); border: 1px solid var(--border); color: var(--text);
+      padding: 4px 8px; font-size: 12px; width: 100%; font-family: var(--sans); outline: none;
+    }
+    .cfg-input:focus, .cfg-select:focus { border-color: var(--blue-deep); }
+    .cfg-del { cursor: pointer; color: var(--dim); text-align: center; }
+    .cfg-del:hover { color: var(--red); }
+    #langBtns .btn.active { background: #1a2c4a; border-color: var(--blue-deep); color: #a8c7f5; }
+
     /* ═══ Toast ═══ */
     #toasts { position: fixed; bottom: 18px; right: 18px; z-index: 950; display: flex; flex-direction: column; gap: 8px; }
     .toast {
@@ -427,6 +437,10 @@
       <div class="rail-btn" data-view="system">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
         <span class="tip">SYSTEM / COLLECTION</span>
+      </div>
+      <div class="rail-btn" data-view="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2.2"/><circle cx="8" cy="16" r="2.2"/></svg>
+        <span class="tip">SETTINGS</span>
       </div>
       <div class="rail-btn" id="helpBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.4 2.3c-.8.35-.9 1-.9 1.7"/><circle cx="12" cy="16.5" r=".5" fill="currentColor"/></svg>
@@ -518,6 +532,48 @@
         <div class="scroll-area"><div class="sys-wrap" id="sysWrap">Loading…</div></div>
       </section>
 
+      <!-- SETTINGS -->
+      <section class="view" id="settingsView" data-view="settings">
+        <div class="toolbar"><span class="count">CONSOLE PREFERENCES · LANGUAGE · TRACKED ASSETS</span></div>
+        <div class="scroll-area"><div class="sys-wrap">
+
+          <div class="sys-sec">
+            <div class="hd"><span>Language · 언어</span></div>
+            <div style="padding:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap" id="langBtns">
+              <button class="btn" data-lang="ko">한국어</button>
+              <button class="btn" data-lang="en">English</button>
+              <span class="count" id="langNote" style="margin-left:8px"></span>
+            </div>
+          </div>
+
+          <div class="sys-sec">
+            <div class="hd"><span id="assetsCfgTitle">Tracked Assets</span><span id="assetsCfgCount"></span></div>
+            <div class="offline-note" id="assetsCfgNote" style="padding:10px 12px 0"></div>
+            <table class="grid-table"><thead><tr>
+              <th style="width:46px" id="thEnabled">On</th>
+              <th style="width:180px" id="thName">Name</th>
+              <th style="width:130px" id="thType">Type</th>
+              <th id="thDesc">Description</th>
+              <th style="width:40px"></th>
+            </tr></thead><tbody id="assetsCfgBody"></tbody></table>
+            <div style="padding:10px 12px;display:flex;gap:8px;align-items:center">
+              <button class="btn" id="assetAddBtn">+ Add asset</button>
+              <button class="btn primary" id="assetSaveBtn">Save changes</button>
+              <span class="count" id="assetSaveNote"></span>
+            </div>
+          </div>
+
+          <div class="sys-sec">
+            <div class="hd"><span>API</span></div>
+            <div class="mono" style="padding:10px 12px;font-size:11px">
+              <span style="color:var(--dim)">ENDPOINT</span> <span id="apiInfo"></span>
+              <div style="color:var(--dim);margin-top:6px;font-size:10px" id="apiNote"></div>
+            </div>
+          </div>
+
+        </div></div>
+      </section>
+
     </main>
 
     <!-- inspector -->
@@ -549,16 +605,7 @@
 <div id="helpOverlay">
   <div id="helpBox">
     <div class="hd">Keyboard Shortcuts</div>
-    <div class="help-grid">
-      <span><kbd>1</kbd>–<kbd>5</kbd></span><span class="d">뷰 전환 (COP / Feed / Intel / Assets / System)</span>
-      <span><kbd>Ctrl K</kbd> <kbd>/</kbd></span><span class="d">커맨드 팔레트 (검색·이동·액션)</span>
-      <span><kbd>J</kbd> / <kbd>K</kbd></span><span class="d">다음 / 이전 이벤트 선택</span>
-      <span><kbd>F</kbd></span><span class="d">Feed로 이동 + 텍스트 필터 포커스</span>
-      <span><kbd>R</kbd></span><span class="d">수집 파이프라인 1회 실행</span>
-      <span><kbd>L</kbd></span><span class="d">LIVE(SSE) 스트림 토글</span>
-      <span><kbd>Esc</kbd></span><span class="d">선택 해제 / 오버레이 닫기</span>
-      <span><kbd>?</kbd></span><span class="d">이 도움말</span>
-    </div>
+    <div class="help-grid" id="helpGrid"></div>
   </div>
 </div>
 
@@ -583,8 +630,82 @@ const THREATCON = { 0: 'NOMINAL', 1: 'NOMINAL', 2: 'MONITOR', 3: 'GUARDED', 4: '
 const SIG = { buy: '#32a467', sell: '#e76a6e', hedge: '#ec9a3c', hold: '#4c90f0', watch: '#5f6b7c' };
 const CAT_LABEL = { energy: 'ENERGY', semiconductor: 'SEMICON', currency: 'CURRENCY', conflict: 'CONFLICT', other: 'OTHER' };
 
+/* ═══════════ i18n (콘솔 크롬은 양쪽 모두 영문 mono 스타일 유지;
+   지역 데이터·도움말·툴팁·설정 라벨이 언어를 따른다) ═══════════ */
+const I18N = {
+  ko: {
+    help: [
+      ['1–6', '뷰 전환 (COP / Feed / Intel / Assets / System / Settings)'],
+      ['Ctrl K, /', '커맨드 팔레트 (검색·이동·액션)'],
+      ['J / K', '다음 / 이전 이벤트 선택'],
+      ['F', 'Feed로 이동 + 텍스트 필터 포커스'],
+      ['R', '수집 파이프라인 1회 실행'],
+      ['L', 'LIVE(SSE) 스트림 토글'],
+      ['Esc', '선택 해제 / 오버레이 닫기'],
+      ['?', '이 도움말'],
+    ],
+    tt_live: 'SSE 실시간 스트림 토글 (L)',
+    tt_sync: '마지막 데이터 동기화 경과',
+    tt_sort: '정렬 토글',
+    tt_prev: '이전 이벤트 (K)',
+    tt_next: '다음 이벤트 (J)',
+    tt_clear: '선택 해제 (Esc)',
+    tt_copy_json: '이벤트 전체 필드를 JSON으로 복사',
+    tt_asset_row: '클릭: Feed에서 이 자산 이벤트 필터',
+    tt_nonhttp: '비HTTP 스킴 — 링크 비활성',
+    lang_note: 'Intel 리포트는 규칙 기반으로 한국어로 생성됩니다.',
+    assets_note: '포트폴리오/워치리스트의 자산 메타를 관리합니다. 목록에 없는 자산이 이벤트에 등장하면 type=other로 표시되고, 체크 해제된 자산은 집계에서 제외됩니다. 저장 시 config.json에 기록됩니다.',
+    saved_ok: '자산 설정 저장 완료',
+    save_fail: '저장 실패',
+    api_note: '?api=http://호스트:8000 쿼리로 override 가능',
+    add_asset: '+ 자산 추가',
+    save_changes: '변경사항 저장',
+    assets_title: '추적 자산 (Tracked Assets)',
+    col_on: 'On', col_name: '이름', col_type: '유형', col_desc: '설명',
+  },
+  en: {
+    help: [
+      ['1–6', 'Switch views (COP / Feed / Intel / Assets / System / Settings)'],
+      ['Ctrl K, /', 'Command palette (search · navigate · actions)'],
+      ['J / K', 'Select next / previous event'],
+      ['F', 'Go to Feed + focus text filter'],
+      ['R', 'Run collection pipeline once'],
+      ['L', 'Toggle LIVE (SSE) stream'],
+      ['Esc', 'Clear selection / close overlay'],
+      ['?', 'This help'],
+    ],
+    tt_live: 'Toggle SSE live stream (L)',
+    tt_sync: 'Time since last data sync',
+    tt_sort: 'Toggle sort',
+    tt_prev: 'Previous event (K)',
+    tt_next: 'Next event (J)',
+    tt_clear: 'Clear selection (Esc)',
+    tt_copy_json: 'Copy full event as JSON',
+    tt_asset_row: 'Click: filter feed by this asset',
+    tt_nonhttp: 'Non-HTTP scheme — link disabled',
+    lang_note: 'Intel reports are rule-generated in Korean.',
+    assets_note: 'Manage asset metadata for the portfolio/watchlist. Assets not listed here still appear as type=other when mentioned in events; unchecked assets are excluded from aggregation. Saved to config.json.',
+    saved_ok: 'Asset settings saved',
+    save_fail: 'Save failed',
+    api_note: 'Override with ?api=http://host:8000',
+    add_asset: '+ Add asset',
+    save_changes: 'Save changes',
+    assets_title: 'Tracked Assets',
+    col_on: 'On', col_name: 'Name', col_type: 'Type', col_desc: 'Description',
+  },
+};
+const t = (key) => (I18N[state.lang] || I18N.ko)[key] || I18N.ko[key] || key;
+const regionName = (r) => (state.lang === 'en' ? (r.name_en || r.name) : r.name);
+const regionDesc = (r) => (state.lang === 'en' ? (r.description_en || r.description) : r.description);
+const regionNameByCode = (code, fallback) => {
+  const r = state.regionIdx?.[code];
+  return r ? regionName(r) : (fallback || code);
+};
+
 const state = {
   view: 'cop',
+  lang: 'ko',            // 'ko' | 'en'
+  regionIdx: {},         // code -> region payload (이름/설명 다국어 lookup)
   ops: null,             // /ops/summary payload
   selected: null,        // {type:'event'|'region', id/code}
   live: false,
@@ -681,6 +802,7 @@ function switchView(view) {
   if (view === 'intel') loadReportDates();
   if (view === 'assets') loadAssets();
   if (view === 'system') loadSystem();
+  if (view === 'settings') loadSettings();
 }
 
 /* ═══════════ map (Leaflet w/ SVG fallback) ═══════════ */
@@ -752,7 +874,7 @@ function renderMap() {
       fillColor: s.c, fillOpacity: active ? 0.5 : 0.12, opacity: active ? 0.95 : 0.4,
     });
     m.bindTooltip(
-      `<span class="mono" style="font-size:9px;letter-spacing:1px;color:${s.c}">SEV ${r.severity} · ${r.event_count} EVT</span><br><b>${esc(r.name)}</b>`,
+      `<span class="mono" style="font-size:9px;letter-spacing:1px;color:${s.c}">SEV ${r.severity} · ${r.event_count} EVT</span><br><b>${esc(regionName(r))}</b>`,
       { className: 'kv-tooltip', direction: 'top', offset: [0, -6] },
     );
     m.on('click', () => selectRegion(r.code, false));
@@ -804,7 +926,7 @@ function renderSvgMap(ops) {
     const s = sevOf(r.severity);
     const rad = r.event_count > 0 ? 4 + r.severity * 1.5 : 2.5;
     mks += `<circle cx="${X(r.lng)}" cy="${Y(r.lat)}" r="${rad}" fill="${s.c}" fill-opacity="0.5" stroke="${s.c}"
-      style="cursor:pointer" data-region="${r.code}"><title>${esc(r.name)} · SEV ${r.severity}</title></circle>`;
+      style="cursor:pointer" data-region="${r.code}"><title>${esc(regionName(r))} · SEV ${r.severity}</title></circle>`;
   });
   $('map').innerHTML = `<svg id="svgMap" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet">${g}${svgWorldPaths || ''}${z}${mks}</svg>
     <div class="offline-note" style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%)">STATIC GRID MODE — MAP LIBRARY UNAVAILABLE</div>`;
@@ -877,7 +999,7 @@ function renderWatchlist() {
     const s = sevOf(r.severity);
     return `<div class="ao-row ${state.selected?.type === 'region' && state.selected.code === r.code ? 'selected' : ''}" data-code="${r.code}">
       <div class="top">
-        <span class="nm">${esc(r.name)}</span>
+        <span class="nm">${esc(regionName(r))}</span>
         ${sevChip(r.severity)}
       </div>
       <div class="meta">
@@ -892,7 +1014,7 @@ function renderWatchlist() {
 
   $('assetList').innerHTML = (ops.assets.length ? ops.assets : []).map((a) => {
     const s = sevOf(a.max_severity);
-    return `<div class="asset-row" data-name="${esc(a.name)}" title="클릭: Feed에서 이 자산 이벤트 필터">
+    return `<div class="asset-row" data-name="${esc(a.name)}" title="${esc(t('tt_asset_row'))}">
       <span class="nm"><span style="color:${s.c};margin-right:7px">●</span>${esc(a.name)}</span>
       <span class="ct">${a.count} EVT · S${a.max_severity}</span>
     </div>`;
@@ -955,7 +1077,7 @@ function renderFeed() {
     <tr data-id="${e.id}" class="${state.selected?.id === e.id ? 'selected' : ''}">
       <td class="mono" style="color:var(--dim)">${esc((e.time || '').slice(11, 16) || '--:--')}</td>
       <td>${sevChip(e.severity)}</td>
-      <td style="color:var(--muted)">${esc(e.region_name)}</td>
+      <td style="color:var(--muted)">${esc(regionNameByCode(e.region, e.region_name))}</td>
       <td class="mono" style="font-size:10px;color:var(--dim)">${esc(CAT_LABEL[e.category] || e.category)}</td>
       <td>${esc(e.event)}</td>
       <td>${sigChip(e.signal)}</td>
@@ -1016,7 +1138,7 @@ function selectEvent(id) {
     </div>
     <div class="insp-sec"><div class="kv">
       <span class="k">Time</span><span class="v mono">${esc(e.time || 'N/A')}</span>
-      <span class="k">Region</span><span class="v">${esc(e.region_name)} <span class="mono" style="color:var(--dim);font-size:9px">${esc(e.region)}</span></span>
+      <span class="k">Region</span><span class="v">${esc(regionNameByCode(e.region, e.region_name))} <span class="mono" style="color:var(--dim);font-size:9px">${esc(e.region)}</span></span>
       <span class="k">Category</span><span class="v mono">${esc(CAT_LABEL[e.category] || e.category)}</span>
       <span class="k">Signal</span><span class="v">${sigChip(e.signal)}</span>
       ${e.confidence != null ? `<span class="k">Confidence</span><span class="v mono">${esc(String(e.confidence))}</span>` : ''}
@@ -1033,12 +1155,12 @@ function selectEvent(id) {
       <div class="k mono" style="font-size:9px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase;margin-bottom:7px">Source</div>
       ${/^https?:\/\//i.test(e.source_url)
         ? `<a class="src-link" href="${esc(e.source_url)}" target="_blank" rel="noopener">${esc(e.source_url)}</a>`
-        : `<span class="src-link" style="color:var(--dim);cursor:default" title="비HTTP 스킴 — 링크 비활성">${esc(e.source_url)}</span>`}
+        : `<span class="src-link" style="color:var(--dim);cursor:default" title="${esc(t('tt_nonhttp'))}">${esc(e.source_url)}</span>`}
     </div>` : ''}
     <div class="insp-sec">
       <button class="btn" id="inspLocate">◎ Locate on map</button>
       <button class="btn" id="inspRegion" style="margin-left:6px">Region dossier →</button>
-      <button class="btn" id="inspCopy" style="margin-left:6px" title="이벤트 전체 필드를 JSON으로 복사">⧉ JSON</button>
+      <button class="btn" id="inspCopy" style="margin-left:6px" title="${esc(t('tt_copy_json'))}">⧉ JSON</button>
     </div>`;
   $('inspLocate')?.addEventListener('click', () => {
     switchView('cop');
@@ -1079,8 +1201,8 @@ async function selectRegion(code, fly) {
         <span class="mono" style="font-size:9px;letter-spacing:1.5px;color:${s.c}">${s.label}</span>
         <span class="mono" style="font-size:9px;color:var(--dim);margin-left:auto">AO/${esc(code.toUpperCase())}</span>
       </div>
-      <div class="insp-title">${esc(r.name)}</div>
-      <div style="font-size:11.5px;color:var(--muted);margin-top:7px;line-height:1.6">${esc(r.description)}</div>
+      <div class="insp-title">${esc(regionName(r))}</div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:7px;line-height:1.6">${esc(regionDesc(r))}</div>
     </div>
     <div class="insp-sec"><div class="kv">
       <span class="k">Coordinates</span><span class="v mono">${r.lat}, ${r.lng}</span>
@@ -1248,6 +1370,91 @@ async function loadSystem() {
   } catch (_) { wrap.innerHTML = '<div class="offline-note">CONFIG API UNAVAILABLE — START BACKEND: uvicorn webapp.backend.app:app --port 8000</div>'; }
 }
 
+/* ═══════════ settings view ═══════════ */
+const ASSET_TYPES = ['commodity', 'index', 'currency', 'equity', 'bond', 'crypto', 'other'];
+let assetsCfg = [];  // 편집 중인 작업 사본
+
+function renderSettingsChrome() {
+  $('langNote').textContent = t('lang_note');
+  $('assetsCfgNote').textContent = t('assets_note');
+  $('assetsCfgTitle').textContent = t('assets_title');
+  $('thEnabled').textContent = t('col_on');
+  $('thName').textContent = t('col_name');
+  $('thType').textContent = t('col_type');
+  $('thDesc').textContent = t('col_desc');
+  $('assetAddBtn').textContent = t('add_asset');
+  $('assetSaveBtn').textContent = t('save_changes');
+  $('apiInfo').textContent = API;
+  $('apiNote').textContent = t('api_note');
+  $('langBtns').querySelectorAll('.btn[data-lang]').forEach((b) =>
+    b.classList.toggle('active', b.dataset.lang === state.lang));
+}
+
+function renderAssetsCfg() {
+  $('assetsCfgCount').textContent = `${assetsCfg.filter((a) => a.enabled !== false).length} ACTIVE / ${assetsCfg.length}`;
+  $('assetsCfgBody').innerHTML = assetsCfg.map((a, i) => `
+    <tr style="cursor:default">
+      <td><input type="checkbox" data-i="${i}" data-f="enabled" ${a.enabled !== false ? 'checked' : ''}></td>
+      <td><input class="cfg-input" data-i="${i}" data-f="name" value="${esc(a.name || '')}" maxlength="60"></td>
+      <td><select class="cfg-select" data-i="${i}" data-f="type">
+        ${ASSET_TYPES.map((tp) => `<option ${a.type === tp ? 'selected' : ''}>${tp}</option>`).join('')}
+      </select></td>
+      <td><input class="cfg-input" data-i="${i}" data-f="description" value="${esc(a.description || '')}"></td>
+      <td class="cfg-del" data-del="${i}" title="remove">✕</td>
+    </tr>`).join('') ||
+    `<tr><td colspan="5" class="offline-note">NO ASSETS — ${esc(t('add_asset'))}</td></tr>`;
+
+  $('assetsCfgBody').querySelectorAll('[data-f]').forEach((el) =>
+    el.addEventListener('input', () => {
+      const a = assetsCfg[Number(el.dataset.i)];
+      if (!a) return;
+      a[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value;
+      if (el.type === 'checkbox') renderAssetsCfg();
+    }));
+  $('assetsCfgBody').querySelectorAll('[data-del]').forEach((el) =>
+    el.addEventListener('click', () => { assetsCfg.splice(Number(el.dataset.del), 1); renderAssetsCfg(); }));
+}
+
+async function loadSettings() {
+  renderSettingsChrome();
+  try {
+    const res = await fetch(`${API}/config`);
+    const cfg = await res.json();
+    assetsCfg = (cfg.assets?.items || []).map((a) => ({ ...a }));
+    renderAssetsCfg();
+  } catch (_) {
+    $('assetsCfgBody').innerHTML = '<tr><td colspan="5" class="offline-note">CONFIG API UNAVAILABLE</td></tr>';
+  }
+}
+
+$('langBtns').querySelectorAll('.btn[data-lang]').forEach((b) =>
+  b.addEventListener('click', () => setLang(b.dataset.lang)));
+$('assetAddBtn').addEventListener('click', () => {
+  assetsCfg.push({ name: '', type: 'other', description: '', enabled: true });
+  renderAssetsCfg();
+  $('assetsCfgBody').querySelector(`[data-i="${assetsCfg.length - 1}"][data-f="name"]`)?.focus();
+});
+$('assetSaveBtn').addEventListener('click', async () => {
+  const items = assetsCfg
+    .map((a) => ({ ...a, name: (a.name || '').trim() }))
+    .filter((a) => a.name);
+  try {
+    const res = await fetch(`${API}/config/assets`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assets: items }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast(`${t('save_fail')}: ${err.detail || res.status}`, 'var(--red)');
+      return;
+    }
+    toast(t('saved_ok'), 'var(--green)');
+    await loadSettings();
+    await loadOps(false);  // 워치리스트/집계에 즉시 반영
+  } catch (_) { toast(t('save_fail'), 'var(--red)'); }
+});
+
 /* ═══════════ command palette ═══════════ */
 const VIEWS = [
   { tag: 'VIEW', label: 'Common Operating Picture', run: () => switchView('cop') },
@@ -1259,6 +1466,8 @@ const VIEWS = [
   { tag: 'ACTION', label: 'Toggle live stream', run: () => $('liveDot').click() },
   { tag: 'ACTION', label: 'Copy ops briefing (LLM context)', run: copyBriefing },
   { tag: 'ACTION', label: 'Keyboard shortcuts', run: () => openHelp() },
+  { tag: 'VIEW', label: 'Settings', run: () => switchView('settings') },
+  { tag: 'ACTION', label: 'Toggle language (한국어/English)', run: () => setLang(state.lang === 'ko' ? 'en' : 'ko') },
 ];
 let palIdx = 0, palItems = [];
 
@@ -1274,8 +1483,9 @@ function paletteSearch(q) {
   VIEWS.filter((v) => q && v.label.toLowerCase().includes(q)).forEach(push);
   const ops = state.ops;
   if (!ops) return out;
-  ops.regions.filter((r) => !q || r.name.toLowerCase().includes(q) || r.code.includes(q))
-    .forEach((r) => push({ tag: 'REGION', label: `${r.name} · S${r.severity} · ${r.event_count} EVT`, run: () => { switchView('cop'); selectRegion(r.code, true); } }));
+  ops.regions.filter((r) => !q || r.name.toLowerCase().includes(q)
+      || (r.name_en || '').toLowerCase().includes(q) || r.code.includes(q))
+    .forEach((r) => push({ tag: 'REGION', label: `${regionName(r)} · S${r.severity} · ${r.event_count} EVT`, run: () => { switchView('cop'); selectRegion(r.code, true); } }));
   ops.assets.filter((a) => q && a.name.toLowerCase().includes(q))
     .forEach((a) => push({ tag: 'ASSET', label: `${a.name} · ${a.count} EVT`, run: () => switchView('assets') }));
   if (q) {
@@ -1306,13 +1516,44 @@ $('searchBtn').addEventListener('click', openPalette);
 $('paletteInput').addEventListener('input', () => { palIdx = 0; renderPalette(); });
 $('paletteOverlay').addEventListener('click', (e) => { if (e.target === $('paletteOverlay')) closePalette(); });
 /* ═══════════ help overlay ═══════════ */
-function openHelp() { $('helpOverlay').classList.add('open'); }
+function renderHelp() {
+  $('helpGrid').innerHTML = t('help').map(([keys, desc]) =>
+    `<span>${keys.split(/[,/]/).map((k) => `<kbd>${esc(k.trim())}</kbd>`).join(' ')}</span>
+     <span class="d">${esc(desc)}</span>`).join('');
+}
+function openHelp() { renderHelp(); $('helpOverlay').classList.add('open'); }
 function closeHelp() { $('helpOverlay').classList.remove('open'); }
+
+/* ═══════════ language ═══════════ */
+function setLang(lang) {
+  if (lang !== 'ko' && lang !== 'en') return;
+  state.lang = lang;
+  persist({ lang });
+  applyLang();
+  toast(lang === 'ko' ? '언어: 한국어' : 'LANGUAGE: ENGLISH');
+}
+
+function applyLang() {
+  // 정적 요소 툴팁
+  $('liveDot').title = t('tt_live');
+  $('syncInfo').title = t('tt_sync');
+  $('inspPrev').title = t('tt_prev');
+  $('inspNext').title = t('tt_next');
+  $('inspClear').title = t('tt_clear');
+  document.querySelectorAll('.grid-table th.sortable').forEach((th) => { th.title = t('tt_sort'); });
+  // 데이터 뷰 재렌더 (지역명/설명 언어 반영)
+  renderWatchlist(); renderMap(); renderFeed();
+  if ($('settingsView').classList.contains('active')) renderSettingsChrome();
+  if ($('helpOverlay').classList.contains('open')) renderHelp();
+  // 인스펙터 재렌더
+  if (state.selected?.type === 'event') selectEvent(state.selected.id);
+  else if (state.selected?.type === 'region') selectRegion(state.selected.code, false);
+}
 $('helpBtn').addEventListener('click', openHelp);
 $('helpOverlay').addEventListener('click', (e) => { if (e.target === $('helpOverlay')) closeHelp(); });
 
 /* ═══════════ global keyboard ═══════════ */
-const VIEW_KEYS = { 1: 'cop', 2: 'feed', 3: 'intel', 4: 'assets', 5: 'system' };
+const VIEW_KEYS = { 1: 'cop', 2: 'feed', 3: 'intel', 4: 'assets', 5: 'system', 6: 'settings' };
 
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); return; }
@@ -1353,6 +1594,7 @@ async function loadOps(showToast) {
     const res = await fetch(`${API}/ops/summary`);
     if (!res.ok) throw new Error(res.statusText);
     state.ops = await res.json();
+    state.regionIdx = Object.fromEntries((state.ops.regions || []).map((r) => [r.code, r]));
     state.lastSync = Date.now();
     renderSync();
     renderTopbar(); renderWatchlist(); renderMap(); renderTimeline();
@@ -1430,9 +1672,11 @@ $('liveDot').addEventListener('click', () => {
 (function boot() {
   const saved = loadPersisted();
   if (saved.sort?.key) state.sort = saved.sort;
+  if (saved.lang === 'en' || saved.lang === 'ko') state.lang = saved.lang;
   state.showQuiet = !!saved.showQuiet;
   state.pendingFilters = saved.filters || null;
 
+  applyLang();
   initMap();
   loadOps(false);
   if (saved.view && saved.view !== 'cop') switchView(saved.view);
