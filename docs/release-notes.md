@@ -4,6 +4,42 @@
 
 ---
 
+## v0.0.13 — 2026-07-19
+
+### 핵심: Settings 전면 확장 — 서버 설정 전 섹션 + 콘솔 환경설정 커스터마이징
+
+1. **서버 설정(config.json) 전 섹션 편집기** (스키마 기반 범용 편집기)
+   - 편집 가능: `assets`, `regions`(신규 섹션), `ais_zones`, `adsb_zones`,
+     `news_feeds`, `news_keywords`, `social_keywords`
+   - 접이식 섹션 UI(활성/전체 카운트), 행 추가/삭제, 저장 시 즉시 반영
+   - `PUT /config/{section}` 범용화 (v0.0.12의 `PUT /config/assets` body도
+     하위호환 수용). 섹션별 검증: 좌표 범위·min<max, URL http(s) 스킴,
+     자산 유형 화이트리스트, 식별자 중복 금지, 빈 행 무시
+2. **감시 지역(regions) 설정화**
+   - `config.json` `regions` 섹션 신설 (기본값: 내장 9개 지역)
+   - `regions.region_info()` — 설정 우선 로드, `enabled:false` 지역은
+     지도/워치리스트/가이드에서 숨김(이벤트 지역명 lookup은 유지)
+   - ops/aggregates/agent manifest vocabulary가 설정 기반으로 동적 반영
+     → 사용자 정의 AO 추가 가능
+3. **콘솔 환경설정 (localStorage)**
+   - 시작 화면(마지막 사용/특정 뷰), 자동 새로고침 주기(30s–5m/끄기),
+     지도·타임라인 최소 severity 필터, 감시구역 오버레이 표시,
+     고심각도 펄스 애니메이션, API 엔드포인트(저장 시 새로고침)
+4. **테스트**: +2건 (커스텀 region이 ops에 반영/비활성 숨김,
+   섹션 검증 로직 — zone 좌표 순서, feed URL 스킴, region code slug)
+
+### 운영 영향
+- Breaking change 없음 — 모든 섹션 미설정 시 기존 기본값과 동일 동작
+- `PUT /config/assets`(구 body 형식) 하위호환 유지
+
+### 검증 결과
+- `ruff check .` → All checks passed / `pytest` → 66 passed (기존 실패 1건 동일)
+- 브라우저 E2E: 7개 섹션 편집기 렌더링, regions 9행 편집, news_feeds 저장
+  round-trip 토스트, minSev=4 설정 시 지도 마커 13→3·타임라인 3점,
+  감시구역 오버레이 토글, 새로고침 후 환경설정 유지, 웜 상태 콘솔 에러 0
+
+---
+
 ## v0.0.12 — 2026-07-19
 
 ### 핵심: Settings 뷰 신설 — 추적 자산 커스터마이징 + 한국어/영어 전환

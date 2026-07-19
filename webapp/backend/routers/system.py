@@ -40,49 +40,136 @@ def current_config() -> dict[str, Any]:
     return summary
 
 
-class AssetItem(BaseModel):
-    name: str = Field(min_length=1, max_length=60)
-    type: str = "other"
-    description: str = ""
-    enabled: bool = True
+class SectionPayload(BaseModel):
+    """범용 설정 섹션 저장 payload. (하위호환: v0.0.12의 `assets` 키도 허용)"""
+
+    items: list[dict[str, Any]] | None = Field(default=None, max_length=200)
+    assets: list[dict[str, Any]] | None = Field(default=None, max_length=200)
 
 
-class AssetsPayload(BaseModel):
-    assets: list[AssetItem] = Field(max_length=100)
+def _slug(text: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
+    return s or "item"
 
 
-def _slug(name: str) -> str:
-    s = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
-    return s or "asset"
+def _bad(msg: str) -> HTTPException:
+    return HTTPException(status_code=400, detail=msg)
 
 
-@router.put("/config/assets")
-def save_assets(payload: AssetsPayload) -> dict[str, Any]:
+def _num(item: dict, field: str, lo: float, hi: float) -> float:
+    try:
+        v = float(item.get(field))
+    except (TypeError, ValueError):
+        raise _bad(f"{field} must be a number") from None
+    if not (lo <= v <= hi):
+        raise _bad(f"{field} out of range [{lo}, {hi}]: {v}")
+    return v
+
+
+def _base(item: dict, key_field: str) -> dict[str, Any]:
+    """공통 필드 검증 — 식별 필드 필수, id/enabled 정규화."""
+    key = str(item.get(key_field, "")).strip()
+    if not key:
+        raise _bad(f"{key_field} is required")
+    return {"id": item.get("id") or _slug(key), key_field: key,
+            "enabled": bool(item.get("enabled", True))}
+
+
+def _validate_zone(item: dict, with_baseline: bool) -> dict[str, Any]:
+    out = _base(item, "name")
+    lat_min, lat_max = _num(item, "lat_min", -90, 90), _num(item, "lat_max", -90, 90)
+    lon_min, lon_max = _num(item, "lon_min", -180, 180), _num(item, "lon_max", -180, 180)
+    if lat_min >= lat_max or lon_min >= lon_max:
+        raise _bad("min must be < max for lat/lon bounds")
+    out.update(lat_min=lat_min, lat_max=lat_max, lon_min=lon_min, lon_max=lon_max)
+    if with_baseline and item.get("baseline_ships") not in (None, ""):
+        out["baseline_ships"] = int(_num(item, "baseline_ships", 1, 100000))
+    return out
+
+
+def _validate_feed(item: dict) -> dict[str, Any]:
+    out = _base(item, "name")
+    url = str(item.get("url", "")).strip()
+    if not re.match(r"^https?://", url):
+        raise _bad(f"url must start with http(s):// — got {url!r}")
+    out["url"] = url
+    return out
+
+
+def _validate_keyword(item: dict) -> dict[str, Any]:
+    return {**_base(item, "query"), }
+
+
+def _validate_asset(item: dict) -> dict[str, Any]:
+    out = _base(item, "name")
+    a_type = str(item.get("type", "other"))
+    if a_type not in ASSET_TYPES:
+        raise _bad(f"invalid type {a_type!r} — allowed: {sorted(ASSET_TYPES)}")
+    out.update(type=a_type, description=str(item.get("description", "")).strip() or out["name"])
+    return out
+
+
+def _validate_region(item: dict) -> dict[str, Any]:
+    out = _base(item, "code")
+    out["code"] = _slug(out["code"])
+    name = str(item.get("name", "")).strip()
+    if not name:
+        raise _bad("name is required")
+    out.update(
+        name=name,
+        name_en=str(item.get("name_en", "")).strip() or name,
+        lat=_num(item, "lat", -90, 90),
+        lng=_num(item, "lng", -180, 180),
+        description=str(item.get("description", "")).strip(),
+        description_en=str(item.get("description_en", "")).strip()
+                       or str(item.get("description", "")).strip(),
+    )
+    return out
+
+
+# 섹션 → (검증 함수, 중복 판정 키)
+EDITABLE_SECTIONS: dict[str, tuple[Any, str]] = {
+    "assets": (_validate_asset, "name"),
+    "regions": (_validate_region, "code"),
+    "ais_zones": (lambda i: _validate_zone(i, with_baseline=True), "name"),
+    "adsb_zones": (lambda i: _validate_zone(i, with_baseline=False), "name"),
+    "news_feeds": (_validate_feed, "name"),
+    "news_keywords": (_validate_keyword, "query"),
+    "social_keywords": (_validate_keyword, "query"),
+}
+
+
+@router.put("/config/{section}")
+def save_config_section(section: str, payload: SectionPayload) -> dict[str, Any]:
     """
-    추적 자산 목록 저장 — config.json의 `assets` 섹션만 갱신 (다른 섹션 보존).
-    포트폴리오/워치리스트의 자산 메타(type/description)와 표시 여부(enabled)에 반영된다.
+    설정 섹션 저장 — config.json의 해당 섹션만 갱신 (다른 섹션 보존).
+
+    편집 가능 섹션: assets, regions, ais_zones, adsb_zones,
+    news_feeds, news_keywords, social_keywords.
     """
+    if section not in EDITABLE_SECTIONS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"unknown section {section!r} — editable: {sorted(EDITABLE_SECTIONS)}")
+    validate, dup_key = EDITABLE_SECTIONS[section]
+
+    raw_items = payload.items if payload.items is not None else payload.assets
+    if raw_items is None:
+        raise _bad("body must contain 'items'")
+
     seen: set[str] = set()
     items: list[dict[str, Any]] = []
-    for a in payload.assets:
-        name = a.name.strip()
-        if not name:
-            continue
-        if name in seen:
-            raise HTTPException(status_code=400, detail=f"duplicate asset name: {name}")
-        if a.type not in ASSET_TYPES:
-            raise HTTPException(
-                status_code=400,
-                detail=f"invalid type {a.type!r} — allowed: {sorted(ASSET_TYPES)}")
-        seen.add(name)
-        items.append({
-            "id": _slug(name),
-            "name": name,
-            "type": a.type,
-            "description": a.description.strip() or name,
-            "enabled": a.enabled,
-        })
+    for raw in raw_items:
+        if not str(raw.get(dup_key, "")).strip():
+            continue  # 빈 행은 조용히 스킵 (편집기 잔여 행)
+        item = validate(raw)
+        key = item[dup_key]
+        if key in seen:
+            raise _bad(f"duplicate {dup_key}: {key}")
+        seen.add(key)
+        items.append(item)
     if not items:
-        raise HTTPException(status_code=400, detail="assets list is empty")
-    path = update_config_section("assets", items)
-    return {"saved": len(items), "config_path": str(path)}
+        raise _bad(f"{section} list is empty")
+
+    path = update_config_section(section, items)
+    return {"section": section, "saved": len(items), "config_path": str(path)}

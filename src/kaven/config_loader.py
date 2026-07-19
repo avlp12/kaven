@@ -95,6 +95,13 @@ DEFAULT_NEWS_KEYWORDS: list[dict[str, Any]] = [
     {"id": "semi_sanctions_ko",    "query": "반도체 제재",               "enabled": True},
 ]
 
+def _default_regions() -> list[dict[str, Any]]:
+    """내장 REGION_INFO를 설정 파일 스키마(list + code/enabled)로 변환."""
+    from src.kaven.regions import REGION_INFO  # 지연 import (모듈 순환 방지)
+
+    return [{"code": code, "enabled": True, **info} for code, info in REGION_INFO.items()]
+
+
 DEFAULT_ASSETS: list[dict[str, Any]] = [
     {"id": "wti",     "name": "WTI",          "type": "commodity", "enabled": True,
      "description": "서부 텍사스 원유 (에너지 벤치마크)"},
@@ -169,6 +176,7 @@ def load_config() -> dict[str, Any]:
         "news_keywords":   overrides.get("news_keywords",   DEFAULT_NEWS_KEYWORDS),
         "social_keywords": overrides.get("social_keywords", DEFAULT_SOCIAL_KEYWORDS),
         "assets":          overrides.get("assets",          DEFAULT_ASSETS),
+        "regions":         overrides.get("regions",         _default_regions()),
     }
 
 

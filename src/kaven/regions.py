@@ -65,8 +65,30 @@ CATEGORIES: list[str] = ["energy", "semiconductor", "currency", "conflict", "oth
 SIGNALS: list[str] = ["buy", "sell", "hedge", "hold", "watch"]
 
 
+def region_info(include_disabled: bool = False) -> dict[str, dict[str, Any]]:
+    """
+    감시 지역 메타 로드 — config.json `regions` 섹션 우선, 없으면 내장 기본값.
+
+    Args:
+        include_disabled: True면 enabled=false 지역도 포함
+                          (이벤트의 지역명 lookup 등 표시 목적).
+    """
+    from src.kaven.config_loader import load_config  # 지연 import (모듈 순환 방지)
+
+    items = load_config().get("regions", [])
+    out: dict[str, dict[str, Any]] = {}
+    for r in items:
+        code = str(r.get("code", "")).strip()
+        if not code:
+            continue
+        if not include_disabled and not r.get("enabled", True):
+            continue
+        out[code] = r
+    return out if out else dict(REGION_INFO)
+
+
 def region_name(code: str) -> str:
     """지역 코드의 한글명. 미등록 코드는 코드 그대로 반환."""
     if code == "other":
         return "기타"
-    return REGION_INFO.get(code, {}).get("name", code)
+    return region_info(include_disabled=True).get(code, {}).get("name", code)

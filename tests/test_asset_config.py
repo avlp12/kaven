@@ -119,3 +119,64 @@ def test_config_loader_includes_assets_section(monkeypatch):
     monkeypatch.setenv("KAVEN_CONFIG", str(_tmp() / "none.json"))
     assert "assets" in load_config()
     assert config_loader.get_assets()  # enabled 기본 True
+
+
+# ── v0.0.13: regions 설정화 + 범용 섹션 검증 ────────────────────
+
+
+def test_custom_region_reflected_in_ops(monkeypatch):
+    """config regions 섹션이 ops 지역 목록/이벤트 지역명에 반영된다."""
+    cfg_path = _tmp() / "config.json"
+    cfg_path.write_text(json.dumps({"regions": [
+        {"code": "baltic", "name": "발트해", "name_en": "Baltic Sea",
+         "lat": 58.0, "lng": 20.0, "description": "발트해 감시", "enabled": True},
+        {"code": "korea", "name": "한반도", "name_en": "Korean Peninsula",
+         "lat": 37.5, "lng": 127.0, "description": "한반도", "enabled": False},
+    ]}, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setenv("KAVEN_CONFIG", str(cfg_path))
+
+    summary = build_ops_summary(_tmp(), "99990101")
+    codes = [r["code"] for r in summary["regions"]]
+    assert codes == ["baltic"]  # enabled=false korea는 목록에서 제외
+
+    # 비활성 지역도 이벤트 지역명 lookup에는 사용됨
+    log_dir = _tmp()
+    _write_events_log(log_dir)  # korea 이벤트
+    ev = build_ops_summary(log_dir, _DATE)["events"][0]
+    assert ev["region_name"] == "한반도"
+
+
+def test_section_validators():
+    """범용 PUT /config/{section} 검증 로직."""
+    import pytest
+
+    from webapp.backend.routers.system import (
+        EDITABLE_SECTIONS,
+        _validate_feed,
+        _validate_region,
+        _validate_zone,
+    )
+    from fastapi import HTTPException
+
+    # zone: 좌표 범위/순서 검증
+    ok = _validate_zone({"name": "발트해", "lat_min": 54, "lat_max": 60,
+                         "lon_min": 10, "lon_max": 30, "baseline_ships": 40}, True)
+    assert ok["baseline_ships"] == 40 and ok["enabled"] is True
+    with pytest.raises(HTTPException):
+        _validate_zone({"name": "bad", "lat_min": 60, "lat_max": 54,
+                        "lon_min": 10, "lon_max": 30}, False)
+
+    # feed: URL 스킴 검증
+    assert _validate_feed({"name": "R", "url": "https://x.com/rss"})["url"].startswith("https")
+    with pytest.raises(HTTPException):
+        _validate_feed({"name": "R", "url": "javascript:alert(1)"})
+
+    # region: code slug + 영문 fallback
+    r = _validate_region({"code": "Baltic Sea!", "name": "발트해", "lat": 58, "lng": 20})
+    assert r["code"] == "baltic_sea" and r["name_en"] == "발트해"
+
+    # 편집 가능 섹션 화이트리스트
+    assert set(EDITABLE_SECTIONS) == {
+        "assets", "regions", "ais_zones", "adsb_zones",
+        "news_feeds", "news_keywords", "social_keywords",
+    }

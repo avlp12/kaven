@@ -13,7 +13,7 @@ from typing import Any
 
 from src.kaven.config_loader import get_assets
 from src.kaven.log_store import load_day_events, recent_dates
-from src.kaven.regions import REGION_INFO
+from src.kaven.regions import region_info
 from src.kaven.report_generator import generate_daily_report
 
 
@@ -61,7 +61,7 @@ def guide_overview(log_dir: Path) -> dict[str, Any]:
     """모든 감시 지역의 현재 상태 요약."""
     report = generate_daily_report(log_dir)
     regions = []
-    for code, info in REGION_INFO.items():
+    for code, info in region_info().items():
         region_data = report.get("by_region", {}).get(code, {})
         regions.append({
             "code": code,
@@ -84,7 +84,7 @@ def guide_overview(log_dir: Path) -> dict[str, Any]:
 
 def region_detail(log_dir: Path, region: str, days: int = 7) -> dict[str, Any] | None:
     """특정 지역의 상세 현황 + 히스토리. 미등록 지역이면 None."""
-    info = REGION_INFO.get(region)
+    info = region_info(include_disabled=True).get(region)
     if info is None:
         return None
     report = generate_daily_report(log_dir)
@@ -107,7 +107,7 @@ def map_points(log_dir: Path) -> dict[str, Any]:
     """지도 시각화용 데이터 — 지역별 최고 severity 이벤트 + 좌표."""
     report = generate_daily_report(log_dir)
     points = []
-    for code, info in REGION_INFO.items():
+    for code, info in region_info().items():
         region_data = report.get("by_region", {}).get(code, {})
         if not region_data.get("events"):
             continue

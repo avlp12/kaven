@@ -16,7 +16,7 @@ from typing import Any
 
 from src.kaven.log_store import dedup_events, load_day_events, today_str
 from src.kaven.ops_summary import build_ops_summary, enrich_event
-from src.kaven.regions import CATEGORIES, REGION_INFO, SEVERITY_LEVELS, SIGNALS
+from src.kaven.regions import CATEGORIES, REGION_INFO, SEVERITY_LEVELS, SIGNALS, region_info
 from src.kaven.version import __version__
 
 
@@ -38,7 +38,8 @@ def query_events(
     """
     if date is None:
         date = today_str()
-    events = [enrich_event(ev) for ev in dedup_events(load_day_events(log_dir, date))]
+    region_map = region_info(include_disabled=True)
+    events = [enrich_event(ev, region_map) for ev in dedup_events(load_day_events(log_dir, date))]
 
     def _match(e: dict[str, Any]) -> bool:
         if severity_min is not None and e["severity"] < severity_min:
@@ -250,7 +251,7 @@ def build_agent_manifest() -> dict[str, Any]:
             "severity_levels": {str(k): v for k, v in SEVERITY_LEVELS.items()},
             "categories": CATEGORIES,
             "signals": SIGNALS,
-            "regions": {code: info["name"] for code, info in REGION_INFO.items()},
+            "regions": {code: info.get("name", code) for code, info in region_info().items()},
             "event_fields": [
                 "id", "event", "severity", "category", "signal", "confidence",
                 "region", "region_name", "lat", "lng", "time",
