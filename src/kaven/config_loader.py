@@ -95,6 +95,18 @@ DEFAULT_NEWS_KEYWORDS: list[dict[str, Any]] = [
     {"id": "semi_sanctions_ko",    "query": "반도체 제재",               "enabled": True},
 ]
 
+DEFAULT_CLI_PROVIDERS: list[dict[str, Any]] = [
+    {"id": "claude", "name": "Claude Code CLI (Claude Pro/Max 구독)", "enabled": True,
+     "command": "claude -p --output-format text"},
+    {"id": "codex", "name": "OpenAI Codex CLI (ChatGPT Plus/Pro 구독)", "enabled": True,
+     "command": "codex exec"},
+    {"id": "cursor", "name": "Cursor Agent CLI (Cursor 구독)", "enabled": True,
+     "command": "cursor-agent -p --output-format text"},
+    {"id": "gemini", "name": "Gemini CLI (Google 계정 OAuth)", "enabled": True,
+     "command": "gemini -p"},
+]
+
+
 def _default_regions() -> list[dict[str, Any]]:
     """내장 REGION_INFO를 설정 파일 스키마(list + code/enabled)로 변환."""
     from src.kaven.regions import REGION_INFO  # 지연 import (모듈 순환 방지)
@@ -177,6 +189,7 @@ def load_config() -> dict[str, Any]:
         "social_keywords": overrides.get("social_keywords", DEFAULT_SOCIAL_KEYWORDS),
         "assets":          overrides.get("assets",          DEFAULT_ASSETS),
         "regions":         overrides.get("regions",         _default_regions()),
+        "cli_providers":   overrides.get("cli_providers",   DEFAULT_CLI_PROVIDERS),
     }
 
 

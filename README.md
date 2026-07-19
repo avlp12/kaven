@@ -38,14 +38,15 @@ AI 에이전트 연동(MCP + REST)을 제공합니다.
 | ![Command Palette](docs/images/palette.png) | ![System](docs/images/system.png) |
 | 지역·이벤트·자산·뷰·액션 통합 검색 | 감시구역/피드/키워드 수집 상태 보드 |
 
-| Settings (전체 커스터마이징) | COP — English mode |
+| Settings — 모델 공급자 (구독/OAuth) | Settings — 수집 설정 편집 |
 |---|---|
-| ![Settings](docs/images/settings.png) | ![COP English](docs/images/cop-en.png) |
-| 언어·콘솔 환경설정 + 자산/지역/감시구역/피드/키워드 전 섹션 편집 | 언어 전환 시 지역명·설명·도움말이 영어로 표시 |
+| ![Settings Providers](docs/images/settings.png) | ![Settings Collection](docs/images/settings-collection.png) |
+| 좌측 설정 내비 + 공급자 카드: OAuth·구독/API Key 상태 배지, CLI 브리지 인라인 편집 | 자산/지역/감시구역/피드/키워드 전 섹션 인라인 편집 → `config.json` 저장 |
 
-**키보드 단축키** — `?` 키로 콘솔 안에서 언제든 확인:
-
-![Shortcuts](docs/images/help.png)
+| COP — English mode | 단축키 도움말 (`?`) |
+|---|---|
+| ![COP English](docs/images/cop-en.png) | ![Shortcuts](docs/images/help.png) |
+| 언어 전환 시 지역명·설명·도움말이 영어로 표시 | 콘솔 안에서 언제든 확인 |
 
 ---
 
@@ -70,9 +71,14 @@ AI 에이전트 연동(MCP + REST)을 제공합니다.
 - **4채널 수집** — AIS 선박(호르무즈·말라카 등), ADS-B 항공(중동·대만·한반도),
   뉴스 RSS(Reuters/AP/BBC + SearxNG), 소셜 검색. 감시구역·피드·키워드는
   전부 설정 파일로 관리하며 항목별 `enabled` 토글 지원.
-- **LLM 분석 + 규칙 폴백** — OpenAI 호환(로컬 LLM 포함) → Gemini → Anthropic →
-  규칙 기반 순서로 폴백. 출력: `event`, `severity(1-5)`, `category`, `signal`,
-  `confidence`, `affected_assets`, `source_url` 등.
+- **LLM 분석 + 규칙 폴백** — OpenAI 호환(로컬 LLM 포함) → Gemini → Anthropic
+  (API 키 또는 **구독 OAuth**) → **CLI 구독 브리지**(Claude Code/Codex/
+  Cursor Agent/Gemini CLI) → 규칙 기반 순서로 폴백. 출력: `event`,
+  `severity(1-5)`, `category`, `signal`, `confidence`, `affected_assets`,
+  `source_url` 등.
+- **구독(OAuth) 모델 연결** — API 키 없이 Claude Pro/Max·ChatGPT Plus/Pro·
+  Cursor·Google 계정 구독으로 분석 모델 사용 (§3.3). GLM(지푸)·Kimi는
+  호환 엔드포인트로 지원.
 - **입력 기준 중복 제거** — 새 자극(신규 뉴스 URL, AIS/ADS-B anomaly)이 없으면
   LLM 호출·발송 자체를 스킵. 텍스트/수치/URL 유사도 기반 이벤트 병합.
 - **텔레그램 경보** — severity 기준 발송, 긴급(5) 별도 헤더.
@@ -142,12 +148,16 @@ OPENSKY_CLIENT_SECRET=
 AISSTREAM_API_KEY=
 SEARXNG_URL=http://localhost:8080
 
-# ===== 분석 (하나만 있어도 됨; 없으면 규칙 기반) =====
+# ===== 분석 (하나만 있어도 됨; 없으면 구독 CLI → 규칙 기반) =====
 OPENAI_BASE_URL=
 OPENAI_API_KEY=
 OPENAI_MODEL=
 GEMINI_API_KEY=
 ANTHROPIC_API_KEY=
+# 구독(OAuth) — API 키 대신 (§3.3): ANTHROPIC_AUTH_TOKEN 또는 `ant auth login`
+ANTHROPIC_AUTH_TOKEN=
+ANTHROPIC_BASE_URL=
+ANTHROPIC_MODEL=
 
 # ===== 알림 =====
 TELEGRAM_BOT_TOKEN=
@@ -164,7 +174,40 @@ ENV
 > 보안: `.env`는 절대 커밋하지 마세요. `CONVEX_SITE_URL` 미설정 시 이벤트는
 > 어떤 외부 엔드포인트로도 전송되지 않습니다.
 
-### 3.3 수집 파이프라인 실행
+### 3.3 구독(OAuth)으로 모델 연결 — API 키 없이
+
+API 키 대신 **이미 쓰고 있는 구독**으로 분석 모델을 연결할 수 있습니다.
+
+**Anthropic 직접 연결** (우선순위: `ANTHROPIC_API_KEY` → OAuth):
+
+| 구독 | 방법 |
+|---|---|
+| Claude Pro/Max | `ant auth login` 한 번이면 끝 — Kaven이 `ant` CLI 프로필에서 단기 토큰을 자동 발급 (또는 `ANTHROPIC_AUTH_TOKEN`에 OAuth 토큰 직접 지정) |
+| GLM (지푸/Z.ai) | `ANTHROPIC_BASE_URL=https://open.bigmodel.cn/api/anthropic` + 구독 키 |
+| Kimi (Moonshot) | `ANTHROPIC_BASE_URL=https://api.moonshot.ai/anthropic` + 구독 키 |
+
+모델은 `ANTHROPIC_MODEL`로 지정 (기본 `claude-sonnet-5`).
+
+**CLI 구독 브리지** — 로그인된 공식 CLI에 분석 프롬프트를 위임합니다.
+설치·로그인만 되어 있으면 자동 감지되며, Settings → 모델 공급자에서
+활성/비활성·명령 편집·커스텀 공급자 추가가 가능합니다:
+
+| 구독 | CLI | 기본 명령 |
+|---|---|---|
+| Claude Pro/Max | Claude Code | `claude -p --output-format text` |
+| ChatGPT Plus/Pro | OpenAI Codex | `codex exec` |
+| Cursor | Cursor Agent | `cursor-agent -p --output-format text` |
+| Google 계정 | Gemini CLI | `gemini -p` |
+
+`KAVEN_CLI_PROVIDER`로 특정 브리지만 사용(`id`)하거나 전체 비활성(`off`)할 수
+있습니다. Grok 등 공식 API 구독 경로가 없는 서비스도 해당 CLI가 있다면
+커스텀 공급자로 등록해 쓸 수 있습니다 (Grok은 xAI API 키를
+`OPENAI_BASE_URL=https://api.x.ai/v1`로 연결하는 방법도 있음).
+
+연결 상태는 콘솔 **Settings → 모델 공급자** 또는 `GET /health`의
+`analysis` 필드에서 확인합니다 (비밀값은 노출되지 않음).
+
+### 3.4 수집 파이프라인 실행
 
 ```bash
 python src/kaven/kaven.py --once            # 1회 실행
@@ -195,7 +238,7 @@ python -m http.server 8080 --directory webapp/frontend
 | **Intel Report** | 일일 브리핑 마크다운 (날짜 선택) |
 | **Asset Impact** | 자산별 7일 severity 히트맵 + 신호 분포 |
 | **System** | 수집 파이프라인/감시구역/피드/키워드 상태 보드 |
-| **Settings** | 언어 전환 + 콘솔 환경설정(시작 화면·새로고침 주기·지도 최소 severity·오버레이·펄스·API 주소) + 서버 설정 전 섹션 편집기(자산/감시지역/AIS·ADS-B 구역/뉴스 피드/키워드 → `config.json` 저장) |
+| **Settings** | zcode 스타일 좌측 내비(콘솔/모델/수집 그룹): 언어·콘솔 환경설정 + **모델 공급자 패널**(Direct API 상태 카드 + CLI 구독 브리지 편집) + 서버 설정 전 섹션 편집기(자산/감시지역/AIS·ADS-B 구역/뉴스 피드/키워드 → `config.json` 저장) |
 
 공통: 좌측 AO 워치리스트(S0 지역은 `+n QUIET` 접기, 자산 클릭 → Feed 필터),
 우측 인스펙터(이벤트 상세·지역 도시에·7일 스파크라인·JSON 복사),
@@ -282,7 +325,8 @@ cp src/kaven/config.example.json src/kaven/config.json   # 편집 후 재시작
 ```
 
 지원 섹션: `ais_zones`, `adsb_zones`, `news_feeds`, `news_keywords`,
-`social_keywords`, `assets`. 각 항목의 `enabled: false`로 수집/집계에서 제외
+`social_keywords`, `assets`, `regions`, `cli_providers`.
+각 항목의 `enabled: false`로 수집/집계에서 제외
 (파일에는 유지), 특정 섹션만 넣으면 해당 섹션만 치환됩니다.
 현재 로드 상태는 `GET /config`으로 확인.
 
@@ -296,6 +340,7 @@ cp src/kaven/config.example.json src/kaven/config.json   # 편집 후 재시작
 | `regions` | 감시 지역(AO) — 코드/이름(한·영)/좌표/설명. 지도·워치리스트·가이드·에이전트 어휘에 반영. 새 지역 추가 가능 |
 | `ais_zones` / `adsb_zones` | 해상/공역 감시구역 bounding box + 지도 오버레이 |
 | `news_feeds` / `news_keywords` / `social_keywords` | 수집기 소스/검색어 |
+| `cli_providers` | AI CLI 구독 브리지 — 이름/명령(프롬프트는 마지막 인자로 전달). Settings → 모델 공급자에서 편집 |
 
 > 참고: `regions`에 새 지역을 추가하면 지도/콘솔에는 즉시 반영되지만,
 > 분석기(LLM)가 그 코드를 이벤트에 부여하려면 분석 프롬프트의 지역 어휘에도
@@ -319,6 +364,10 @@ cp src/kaven/config.example.json src/kaven/config.json   # 편집 후 재시작
 | `KAVEN_LOG_DIR` | JSONL 로그 디렉터리 (읽기/쓰기 공통) | `src/kaven/logs` |
 | `SEARXNG_URL` | 뉴스/소셜 검색 엔진 | `http://localhost:8080` |
 | `OPENAI_BASE_URL` 외 | 분석 LLM (§3.2 참조) | 규칙 기반 폴백 |
+| `ANTHROPIC_AUTH_TOKEN` | 구독 OAuth 토큰 (또는 `ant auth login` 프로필 자동 사용) | — |
+| `ANTHROPIC_BASE_URL` | Anthropic 호환 엔드포인트 (GLM/Kimi 등) | `api.anthropic.com` |
+| `ANTHROPIC_MODEL` | Anthropic 계열 분석 모델 | `claude-sonnet-5` |
+| `KAVEN_CLI_PROVIDER` | CLI 브리지 선택 — `auto`/`off`/특정 id | `auto` |
 | `TELEGRAM_*` | 경보 발송 | 미발송 |
 | `CONVEX_SITE_URL` | 원격 백업 opt-in | 비활성 |
 
@@ -328,7 +377,7 @@ FastAPI 문서: `GET /docs` (Swagger UI), `GET /openapi.json`
 
 | 엔드포인트 | 설명 |
 |---|---|
-| `GET /health` | 헬스체크 + 버전 |
+| `GET /health` | 헬스체크 + 버전 + 분석 백엔드 상태(`analysis` — 인증 모드/CLI 설치 여부, 비밀값 미노출) |
 | `GET /ops/summary?date=` | 콘솔용 통합 요약 (지역+이벤트+자산+감시구역) |
 | `GET /agent/manifest` · `/agent/context` · `/agent/events` | AI 에이전트 연동 (§5) |
 | `GET /runs` · `/runs/latest` · `/runs/files` · `/runs/dates` | 실행 로그 조회 (+필터) |
@@ -339,7 +388,7 @@ FastAPI 문서: `GET /docs` (Swagger UI), `GET /openapi.json`
 | `GET /map/data` | 지도 마커 데이터 |
 | `GET /portfolio` · `/portfolio/{asset}` | 자산 영향 집계 |
 | `GET /config` | 수집 설정 조회 |
-| `PUT /config/{section}` | 설정 섹션 저장 — assets/regions/ais_zones/adsb_zones/news_feeds/news_keywords/social_keywords (Settings 뷰가 사용) |
+| `PUT /config/{section}` | 설정 섹션 저장 — assets/regions/ais_zones/adsb_zones/news_feeds/news_keywords/social_keywords/cli_providers (Settings 뷰가 사용) |
 
 ## 8) 프로젝트 구조
 
@@ -348,6 +397,8 @@ src/kaven/
 ├── kaven.py            # 메인 실행기 (--once / --watch), dedup, 발송, 저장
 ├── collectors/         # ais / adsb / news / social 수집기
 ├── analyzer.py         # LLM 분석 엔진 (다단계 폴백)
+├── anthropic_auth.py   # Anthropic 인증 해석 (API 키 / 구독 OAuth / ant CLI)
+├── cli_providers.py    # CLI 구독 브리지 (claude/codex/cursor-agent/gemini)
 ├── signal_generator.py # 텔레그램 경보
 ├── config_loader.py    # 감시구역/피드/키워드 설정 로더
 ├── log_store.py        # JSONL 로그 액세스 단일 소스 (KAVEN_LOG_DIR)

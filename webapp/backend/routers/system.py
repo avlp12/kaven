@@ -1,13 +1,17 @@
-"""시스템 라우터 — 헬스체크 / 수집 설정 조회 / 자산 설정 저장."""
+"""시스템 라우터 — 헬스체크 / 수집 설정 조회 / 설정 저장."""
 
 from __future__ import annotations
 
+import os
 import re
+import shlex
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from src.kaven.anthropic_auth import auth_mode as anthropic_auth_mode
+from src.kaven.cli_providers import provider_status
 from src.kaven.config_loader import load_config, update_config_section
 from src.kaven.version import __version__
 
@@ -17,8 +21,20 @@ ASSET_TYPES = {"commodity", "index", "currency", "equity", "bond", "crypto", "ot
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "kaven-web-api", "version": __version__}
+def health() -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "service": "kaven-web-api",
+        "version": __version__,
+        # 분석 경로별 자격증명 상태 (비밀값 미노출)
+        "analysis": {
+            "openai_compatible": bool(os.getenv("OPENAI_BASE_URL", "").strip()),
+            "gemini": bool(os.getenv("GEMINI_API_KEY", "").strip()),
+            "anthropic": anthropic_auth_mode(),  # api_key | oauth | none
+            "anthropic_base_url": bool(os.getenv("ANTHROPIC_BASE_URL", "").strip()),
+            "cli_providers": provider_status(),
+        },
+    }
 
 
 @router.get("/config")
@@ -100,6 +116,19 @@ def _validate_keyword(item: dict) -> dict[str, Any]:
     return {**_base(item, "query"), }
 
 
+def _validate_cli_provider(item: dict) -> dict[str, Any]:
+    out = _base(item, "name")
+    command = str(item.get("command", "")).strip()
+    try:
+        argv = shlex.split(command)
+    except ValueError as e:
+        raise _bad(f"invalid command: {e}") from None
+    if not argv:
+        raise _bad("command is required")
+    out.update(id=item.get("id") or _slug(argv[0]), command=command)
+    return out
+
+
 def _validate_asset(item: dict) -> dict[str, Any]:
     out = _base(item, "name")
     a_type = str(item.get("type", "other"))
@@ -136,6 +165,7 @@ EDITABLE_SECTIONS: dict[str, tuple[Any, str]] = {
     "news_feeds": (_validate_feed, "name"),
     "news_keywords": (_validate_keyword, "query"),
     "social_keywords": (_validate_keyword, "query"),
+    "cli_providers": (_validate_cli_provider, "name"),
 }
 
 

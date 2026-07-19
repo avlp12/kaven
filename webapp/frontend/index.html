@@ -375,9 +375,44 @@
     }
     .prefs-grid label { font-size: 12px; color: var(--muted); }
     .prefs-grid input[type=checkbox] { justify-self: start; }
-    .cfg-head-toggle { cursor: pointer; user-select: none; }
-    .cfg-head-toggle:hover { color: var(--text); }
     .cfg-num { max-width: 90px; }
+
+    /* zcode 스타일 설정 레이아웃 — 좌측 내비 + 우측 콘텐츠 페인 */
+    .set-layout { display: flex; gap: 18px; padding: 16px 20px 40px; max-width: 1120px; width: 100%; margin: 0 auto; align-items: flex-start; }
+    .set-nav { width: 192px; flex-shrink: 0; position: sticky; top: 0; padding-top: 2px; }
+    .set-nav-group { font-family: var(--mono); font-size: 8.5px; letter-spacing: 1.8px; color: var(--dim); text-transform: uppercase; padding: 14px 12px 5px; }
+    .set-nav-group:first-child { padding-top: 2px; }
+    .set-nav-item {
+      padding: 7px 12px; font-size: 12.5px; color: var(--muted); cursor: pointer;
+      border-left: 2px solid transparent; border-radius: 3px; user-select: none;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .set-nav-item:hover { background: var(--bg2); color: var(--text); }
+    .set-nav-item.active { background: #1a2c4a66; color: #a8c7f5; border-left-color: var(--blue); }
+    .set-body { flex: 1; min-width: 0; }
+
+    /* 모델 공급자 카드 (zcode Model Settings 참고) */
+    .prov-card { background: var(--bg1); border: 1px solid var(--border); border-radius: 5px; margin-bottom: 10px; }
+    .prov-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; }
+    .prov-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .prov-name { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; }
+    .prov-name input { background: transparent; border: 1px solid transparent; color: var(--text); font-size: 13px; font-weight: 600; width: 100%; padding: 2px 6px; border-radius: 3px; outline: none; font-family: var(--sans); }
+    .prov-name input:hover, .prov-name input:focus { border-color: var(--border); background: var(--bg2); }
+    .prov-badge {
+      font-family: var(--mono); font-size: 8.5px; letter-spacing: 1.1px; text-transform: uppercase;
+      border: 1px solid var(--border-hi); border-radius: 10px; padding: 2px 9px;
+      color: var(--muted); white-space: nowrap; flex-shrink: 0;
+    }
+    .prov-badge.ok { color: #57c78b; border-color: #2a5c41; background: #12281c66; }
+    .prov-badge.warn { color: var(--orange); border-color: #6b4a1f; background: #2a1f0e66; }
+    .prov-body { border-top: 1px solid var(--border); padding: 9px 14px 11px; display: grid; grid-template-columns: 92px 1fr; gap: 6px 12px; align-items: center; }
+    .prov-body .k { font-family: var(--mono); font-size: 8.5px; letter-spacing: 1.2px; color: var(--dim); text-transform: uppercase; }
+    .prov-body .v { font-size: 11.5px; color: var(--muted); word-break: break-all; min-width: 0; }
+    .prov-unlink { cursor: pointer; color: var(--dim); font-size: 12px; padding: 2px 6px; flex-shrink: 0; }
+    .prov-unlink:hover { color: var(--red); }
+    .prov-sec-title { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.6px; color: var(--muted); text-transform: uppercase; padding: 14px 2px 8px; }
+    .prov-sec-title:first-child { padding-top: 0; }
+    .prov-toggle { display: flex; align-items: center; gap: 5px; flex-shrink: 0; font-family: var(--mono); font-size: 8.5px; letter-spacing: 1px; color: var(--dim); cursor: pointer; user-select: none; }
 
     /* ═══ Toast ═══ */
     #toasts { position: fixed; bottom: 18px; right: 18px; z-index: 950; display: flex; flex-direction: column; gap: 8px; }
@@ -543,53 +578,66 @@
 
       <!-- SETTINGS -->
       <section class="view" id="settingsView" data-view="settings">
-        <div class="toolbar"><span class="count">CONSOLE PREFERENCES · LANGUAGE · TRACKED ASSETS</span></div>
-        <div class="scroll-area"><div class="sys-wrap">
+        <div class="toolbar"><span class="count">SETTINGS · MODEL PROVIDERS · COLLECTION · CONSOLE</span></div>
+        <div class="scroll-area"><div class="set-layout">
 
-          <div class="sys-sec">
-            <div class="hd"><span>Language · 언어</span></div>
-            <div style="padding:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap" id="langBtns">
-              <button class="btn" data-lang="ko">한국어</button>
-              <button class="btn" data-lang="en">English</button>
-              <span class="count" id="langNote" style="margin-left:8px"></span>
-            </div>
-          </div>
+          <nav class="set-nav" id="setNav"></nav>
 
-          <div class="sys-sec">
-            <div class="hd"><span>Console Preferences</span></div>
-            <div class="prefs-grid" id="prefsGrid">
-              <label id="lbView"></label>
-              <select class="cfg-select" id="prefView">
-                <option value="last"></option>
-                <option value="cop">COP</option><option value="feed">Event Feed</option>
-                <option value="intel">Intel Report</option><option value="assets">Asset Impact</option>
-                <option value="system">System</option>
-              </select>
-              <label id="lbRefresh"></label>
-              <select class="cfg-select" id="prefRefresh">
-                <option value="30">30s</option><option value="60">60s</option>
-                <option value="120">2m</option><option value="300">5m</option>
-                <option value="0"></option>
-              </select>
-              <label id="lbMinSev"></label>
-              <select class="cfg-select" id="prefMinSev">
-                <option value="0">ALL</option><option value="2">S2+</option>
-                <option value="3">S3+</option><option value="4">S4+</option><option value="5">S5</option>
-              </select>
-              <label id="lbZones"></label>
-              <input type="checkbox" id="prefZones" />
-              <label id="lbPulse"></label>
-              <input type="checkbox" id="prefPulse" />
-              <label id="lbApi"></label>
-              <div style="display:flex;gap:8px">
-                <input class="cfg-input mono" id="prefApi" placeholder="http://127.0.0.1:8000" style="font-size:11px" />
-                <button class="btn" id="prefApiApply">Apply</button>
+          <div class="set-body">
+
+            <div id="setGeneral" style="display:none">
+              <div class="sys-sec">
+                <div class="hd"><span>Language · 언어</span></div>
+                <div style="padding:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap" id="langBtns">
+                  <button class="btn" data-lang="ko">한국어</button>
+                  <button class="btn" data-lang="en">English</button>
+                  <span class="count" id="langNote" style="margin-left:8px"></span>
+                </div>
+              </div>
+
+              <div class="sys-sec">
+                <div class="hd"><span>Console Preferences</span></div>
+                <div class="prefs-grid" id="prefsGrid">
+                  <label id="lbView"></label>
+                  <select class="cfg-select" id="prefView">
+                    <option value="last"></option>
+                    <option value="cop">COP</option><option value="feed">Event Feed</option>
+                    <option value="intel">Intel Report</option><option value="assets">Asset Impact</option>
+                    <option value="system">System</option>
+                  </select>
+                  <label id="lbRefresh"></label>
+                  <select class="cfg-select" id="prefRefresh">
+                    <option value="30">30s</option><option value="60">60s</option>
+                    <option value="120">2m</option><option value="300">5m</option>
+                    <option value="0"></option>
+                  </select>
+                  <label id="lbMinSev"></label>
+                  <select class="cfg-select" id="prefMinSev">
+                    <option value="0">ALL</option><option value="2">S2+</option>
+                    <option value="3">S3+</option><option value="4">S4+</option><option value="5">S5</option>
+                  </select>
+                  <label id="lbZones"></label>
+                  <input type="checkbox" id="prefZones" />
+                  <label id="lbPulse"></label>
+                  <input type="checkbox" id="prefPulse" />
+                  <label id="lbApi"></label>
+                  <div style="display:flex;gap:8px">
+                    <input class="cfg-input mono" id="prefApi" placeholder="http://127.0.0.1:8000" style="font-size:11px" />
+                    <button class="btn" id="prefApiApply">Apply</button>
+                  </div>
+                </div>
+                <div class="offline-note" id="prefsNote" style="padding:0 14px 12px"></div>
               </div>
             </div>
-            <div class="offline-note" id="prefsNote" style="padding:0 14px 12px"></div>
-          </div>
 
-          <div id="cfgSections"></div>
+            <div id="setProviders" style="display:none">
+              <div class="offline-note" id="provNote" style="padding:0 2px 10px"></div>
+              <div id="provWrap">Loading…</div>
+            </div>
+
+            <div id="cfgSections" style="display:none"></div>
+
+          </div>
 
         </div></div>
       </section>
@@ -690,6 +738,39 @@ const I18N = {
     pref_zones: '지도에 감시구역 오버레이 표시',
     pref_pulse: '고심각도(S4+) 펄스 애니메이션',
     pref_api: 'API 엔드포인트',
+    grp_console: '콘솔',
+    grp_models: '모델',
+    grp_collection: '수집 · 데이터',
+    nav_general: '일반 · 환경설정',
+    nav_providers: '모델 공급자',
+    nav_assets: '추적 자산',
+    nav_regions: '감시 지역 (AO)',
+    nav_ais_zones: 'AIS 해상 감시구역',
+    nav_adsb_zones: 'ADS-B 항공 감시구역',
+    nav_news_feeds: '뉴스 피드',
+    nav_news_keywords: '뉴스 키워드',
+    nav_social_keywords: '소셜 키워드',
+    prov_note: 'AI 분석 모델 연결 상태입니다. Direct API는 서버 환경변수로 설정되며, CLI 브리지는 구독(OAuth) 로그인된 공식 CLI에 분석을 위임합니다. 우선순위: OpenAI 호환 → Gemini → Anthropic → CLI 브리지 → 규칙 기반.',
+    prov_direct: 'Direct API — 환경변수 설정',
+    prov_cli: 'CLI 브리지 — 구독 · OAuth',
+    prov_add: '+ 공급자 추가',
+    prov_oauth: 'OAuth · 구독',
+    prov_apikey: 'API Key',
+    prov_none: '미설정',
+    prov_installed: '설치됨',
+    prov_notinstalled: '미설치',
+    prov_disabled: '비활성',
+    prov_enabled_lb: '사용',
+    prov_endpoint: '엔드포인트',
+    prov_model: '모델',
+    prov_conn: '연결 방식',
+    prov_cmd: '명령',
+    prov_env: '환경변수',
+    prov_anthropic_hint: 'Claude Pro/Max 구독은 `ant` CLI 로그인 또는 ANTHROPIC_AUTH_TOKEN(OAuth)으로, API 키는 ANTHROPIC_API_KEY로 연결됩니다. ANTHROPIC_BASE_URL로 GLM(지푸)·Kimi 등 Anthropic 호환 엔드포인트도 사용 가능합니다.',
+    prov_openai_hint: 'OpenAI · Grok(xAI) · GLM · Kimi 등 OpenAI 호환 엔드포인트 (OPENAI_BASE_URL + OPENAI_API_KEY).',
+    prov_gemini_hint: 'Google Gemini API (GEMINI_API_KEY).',
+    prov_cli_hint: '프롬프트는 명령의 마지막 인자로 전달됩니다. KAVEN_CLI_PROVIDER 환경변수로 특정 브리지만 사용(id) 또는 전체 비활성(off)할 수 있습니다.',
+    prov_custom_endpoint: '커스텀 엔드포인트',
   },
   en: {
     help: [
@@ -726,6 +807,39 @@ const I18N = {
     pref_zones: 'Show watchzone overlays on map',
     pref_pulse: 'High-severity (S4+) pulse animation',
     pref_api: 'API endpoint',
+    grp_console: 'Console',
+    grp_models: 'Models',
+    grp_collection: 'Collection · Data',
+    nav_general: 'General · Preferences',
+    nav_providers: 'Model Providers',
+    nav_assets: 'Tracked Assets',
+    nav_regions: 'Watch Regions (AO)',
+    nav_ais_zones: 'AIS Maritime Zones',
+    nav_adsb_zones: 'ADS-B Air Zones',
+    nav_news_feeds: 'News Feeds',
+    nav_news_keywords: 'News Keywords',
+    nav_social_keywords: 'Social Keywords',
+    prov_note: 'AI analysis model connections. Direct APIs are configured via server environment variables; CLI bridges delegate analysis to official CLIs signed in with a subscription (OAuth). Priority: OpenAI-compatible → Gemini → Anthropic → CLI bridges → rule-based.',
+    prov_direct: 'Direct API — environment variables',
+    prov_cli: 'CLI Bridges — subscription · OAuth',
+    prov_add: '+ Add provider',
+    prov_oauth: 'OAuth · Subscription',
+    prov_apikey: 'API Key',
+    prov_none: 'Not configured',
+    prov_installed: 'Installed',
+    prov_notinstalled: 'Not installed',
+    prov_disabled: 'Disabled',
+    prov_enabled_lb: 'ON',
+    prov_endpoint: 'Endpoint',
+    prov_model: 'Model',
+    prov_conn: 'Connection',
+    prov_cmd: 'Command',
+    prov_env: 'Env vars',
+    prov_anthropic_hint: 'Claude Pro/Max subscriptions connect via `ant` CLI login or ANTHROPIC_AUTH_TOKEN (OAuth); API keys via ANTHROPIC_API_KEY. ANTHROPIC_BASE_URL also enables Anthropic-compatible endpoints such as GLM (Zhipu) and Kimi.',
+    prov_openai_hint: 'OpenAI-compatible endpoints — OpenAI · Grok (xAI) · GLM · Kimi (OPENAI_BASE_URL + OPENAI_API_KEY).',
+    prov_gemini_hint: 'Google Gemini API (GEMINI_API_KEY).',
+    prov_cli_hint: 'The prompt is passed as the last argument of the command. Use the KAVEN_CLI_PROVIDER env var to pin one bridge (id) or disable all (off).',
+    prov_custom_endpoint: 'Custom endpoint',
   },
 };
 const t = (key) => (I18N[state.lang] || I18N.ko)[key] || I18N.ko[key] || key;
@@ -750,6 +864,8 @@ const state = {
   pendingFilters: null,                 // localStorage에서 복원 대기 중인 필터
   lastRunId: null,                      // SSE 재연결 시 중복 run_update 무시용
   opsDown: false,                       // 백엔드 다운 상태 (토스트 중복 방지)
+  setTab: 'general',                    // Settings 좌측 내비 선택 (zcode 스타일)
+  health: null,                         // /health 캐시 (모델 공급자 상태 표시)
   prefs: {                              // 콘솔 환경설정 (Settings 뷰, localStorage)
     defaultView: 'last', refreshSec: 60, minSev: 0,
     showZones: true, pulse: true, apiBase: '',
@@ -1389,11 +1505,24 @@ async function loadSystem() {
       fetch(`${API}/health`).then((r) => r.json()),
       fetch(`${API}/config`).then((r) => r.json()),
     ]);
-    const secTitle = { ais_zones: 'AIS WATCHZONES (MARITIME)', adsb_zones: 'ADS-B WATCHZONES (AIR)', news_feeds: 'NEWS FEEDS', news_keywords: 'NEWS KEYWORDS', social_keywords: 'SOCIAL KEYWORDS' };
+    const secTitle = { ais_zones: 'AIS WATCHZONES (MARITIME)', adsb_zones: 'ADS-B WATCHZONES (AIR)', news_feeds: 'NEWS FEEDS', news_keywords: 'NEWS KEYWORDS', social_keywords: 'SOCIAL KEYWORDS', cli_providers: 'AI CLI BRIDGES (SUBSCRIPTION / OAUTH)' };
+    state.health = health;
+    const a = health.analysis || {};
+    const dot = (on, warn) => `<span class="en-dot" style="background:${on ? 'var(--green)' : warn ? 'var(--orange)' : '#333d4a'}"></span>`;
+    const cliLine = (a.cli_providers || []).map((p) =>
+      dot(p.enabled && p.installed, p.enabled && !p.installed) + esc(p.id || p.name)).join(' &nbsp;');
+    const anthLabel = a.anthropic === 'oauth' ? 'OAUTH (SUBSCRIPTION)'
+      : a.anthropic === 'api_key' ? 'API KEY' : 'NOT CONFIGURED';
     let html = `<div class="sys-sec"><div class="hd"><span>SERVICE STATUS</span>
       <span style="color:var(--green)">● ${esc(health.status).toUpperCase()} · v${esc(health.version)}</span></div>
-      <div class="mono" style="padding:10px 12px;font-size:11px">
-        <span style="color:var(--dim)">API</span> ${esc(API)}</div></div>`;
+      <div class="mono" style="padding:10px 12px;font-size:11px;display:grid;grid-template-columns:130px 1fr;gap:5px 10px">
+        <span style="color:var(--dim)">API</span><span>${esc(API)}</span>
+        <span style="color:var(--dim)">ANTHROPIC AUTH</span>
+        <span>${dot(a.anthropic && a.anthropic !== 'none')}${anthLabel}${a.anthropic_base_url ? ' · CUSTOM BASE URL' : ''}</span>
+        <span style="color:var(--dim)">OPENAI-COMPAT</span><span>${dot(a.openai_compatible)}${a.openai_compatible ? 'CONFIGURED' : 'NOT CONFIGURED'}</span>
+        <span style="color:var(--dim)">GEMINI API</span><span>${dot(a.gemini)}${a.gemini ? 'CONFIGURED' : 'NOT CONFIGURED'}</span>
+        <span style="color:var(--dim)">CLI BRIDGES</span><span>${cliLine || '—'}</span>
+      </div></div>`;
     for (const [key, sec] of Object.entries(cfg)) {
       html += `<div class="sys-sec"><div class="hd"><span>${secTitle[key] || key.toUpperCase()}</span>
         <span>${sec.enabled} ACTIVE / ${sec.total}</span></div>
@@ -1401,6 +1530,7 @@ async function loadSystem() {
         sec.items.map((it) => {
           const en = it.enabled !== false;
           const detail = it.url ? esc(it.url) : it.query ? `"${esc(it.query)}"`
+            : it.command ? esc(it.command)
             : it.lat_min != null ? `${it.lat_min}°–${it.lat_max}°N · ${it.lon_min}°–${it.lon_max}°E` : '';
           return `<tr style="cursor:default"><td style="width:220px">
             <span class="en-dot" style="background:${en ? 'var(--green)' : '#333d4a'}"></span>${esc(it.name || it.id)}</td>
@@ -1459,10 +1589,45 @@ const CFG_SECTIONS = [
     { f: 'query', type: 'text' },
   ] },
 ];
-let cfgData = {};                 // key -> 편집 중인 작업 사본
-const cfgOpen = { assets: true }; // 섹션 접힘 상태 (assets만 기본 펼침)
+let cfgData = {};   // key -> 편집 중인 작업 사본 (cli_providers 포함)
+
+/* 좌측 설정 내비 (zcode 스타일) — general/providers + config 섹션 */
+const SET_NAV = [
+  { id: 'general', group: 'grp_console' },
+  { id: 'providers', group: 'grp_models' },
+  ...CFG_SECTIONS.map((s) => ({ id: s.key, group: 'grp_collection' })),
+];
+
+function renderSetNav() {
+  let html = '', lastGroup = null;
+  for (const item of SET_NAV) {
+    if (item.group !== lastGroup) {
+      html += `<div class="set-nav-group">${esc(t(item.group))}</div>`;
+      lastGroup = item.group;
+    }
+    html += `<div class="set-nav-item ${state.setTab === item.id ? 'active' : ''}" data-tab="${item.id}">${esc(t('nav_' + item.id))}</div>`;
+  }
+  $('setNav').innerHTML = html;
+  $('setNav').querySelectorAll('[data-tab]').forEach((el) =>
+    el.addEventListener('click', () => {
+      state.setTab = el.dataset.tab;
+      persist({ setTab: state.setTab });
+      renderSetNav();
+      renderSetBody();
+    }));
+}
+
+function renderSetBody() {
+  const tab = state.setTab;
+  $('setGeneral').style.display = tab === 'general' ? '' : 'none';
+  $('setProviders').style.display = tab === 'providers' ? '' : 'none';
+  $('cfgSections').style.display = (tab !== 'general' && tab !== 'providers') ? '' : 'none';
+  if (tab === 'providers') renderProviders();
+  else if (tab !== 'general') renderCfgSections();
+}
 
 function renderSettingsChrome() {
+  renderSetNav();
   $('langNote').textContent = t('lang_note');
   $('prefsNote').textContent = t('prefs_note');
   $('lbView').textContent = t('pref_view');
@@ -1511,42 +1676,30 @@ function renderCfgTable(sec, items) {
 }
 
 function renderCfgSections() {
-  $('cfgSections').innerHTML =
-    `<div class="offline-note" style="padding:0 2px 10px">${esc(t('cfg_note'))}</div>` +
-    CFG_SECTIONS.map((sec) => {
-      const items = cfgData[sec.key] || [];
-      const open = !!cfgOpen[sec.key];
-      const en = items.filter((x) => x.enabled !== false).length;
-      return `<div class="sys-sec">
-        <div class="hd cfg-head-toggle" data-toggle="${sec.key}">
-          <span>${open ? '▾' : '▸'} ${sec.title}</span><span>${en} ACTIVE / ${items.length}</span>
-        </div>
-        ${open ? renderCfgTable(sec, items) : ''}
-      </div>`;
-    }).join('');
-
+  const sec = CFG_SECTIONS.find((s) => s.key === state.setTab);
   const root = $('cfgSections');
-  root.querySelectorAll('[data-toggle]').forEach((el) =>
-    el.addEventListener('click', () => {
-      cfgOpen[el.dataset.toggle] = !cfgOpen[el.dataset.toggle];
-      renderCfgSections();
-    }));
+  if (!sec) { root.innerHTML = ''; return; }
+  const items = cfgData[sec.key] || [];
+  const en = items.filter((x) => x.enabled !== false).length;
+  root.innerHTML =
+    `<div class="offline-note" style="padding:0 2px 10px">${esc(t('cfg_note'))}</div>
+     <div class="sys-sec">
+       <div class="hd"><span>${sec.title}</span><span>${en} ACTIVE / ${items.length}</span></div>
+       ${renderCfgTable(sec, items)}
+     </div>`;
+
   root.querySelectorAll('[data-f]').forEach((el) => {
-    const sec = el.closest('.sys-sec').querySelector('[data-toggle]').dataset.toggle;
     el.addEventListener('input', () => {
-      const item = cfgData[sec]?.[Number(el.dataset.i)];
+      const item = cfgData[sec.key]?.[Number(el.dataset.i)];
       if (!item) return;
       item[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value;
       if (el.type === 'checkbox') renderCfgSections();
     });
   });
-  root.querySelectorAll('[data-del]').forEach((el) => {
-    const sec = el.closest('.sys-sec').querySelector('[data-toggle]').dataset.toggle;
-    el.addEventListener('click', () => { cfgData[sec].splice(Number(el.dataset.del), 1); renderCfgSections(); });
-  });
+  root.querySelectorAll('[data-del]').forEach((el) =>
+    el.addEventListener('click', () => { cfgData[sec.key].splice(Number(el.dataset.del), 1); renderCfgSections(); }));
   root.querySelectorAll('[data-add]').forEach((el) =>
     el.addEventListener('click', () => {
-      const sec = CFG_SECTIONS.find((s) => s.key === el.dataset.add);
       const blank = { enabled: true };
       sec.cols.forEach((c) => { if (c.type !== 'check') blank[c.f] = c.type === 'select' ? c.opts[0] : ''; });
       (cfgData[sec.key] = cfgData[sec.key] || []).push(blank);
@@ -1554,6 +1707,107 @@ function renderCfgSections() {
     }));
   root.querySelectorAll('[data-save]').forEach((el) =>
     el.addEventListener('click', () => saveSection(el.dataset.save)));
+}
+
+/* ── 모델 공급자 패널 (zcode Model Settings 스타일) ── */
+function provCard({ dot, name, badge, badgeCls, rows, headExtra }) {
+  return `<div class="prov-card">
+    <div class="prov-head">
+      <span class="prov-dot" style="background:${dot}"></span>
+      <span class="prov-name">${name}</span>
+      ${badge ? `<span class="prov-badge ${badgeCls || ''}">${esc(badge)}</span>` : ''}
+      ${headExtra || ''}
+    </div>
+    ${rows?.length ? `<div class="prov-body">${rows.map(([k, v]) =>
+      `<span class="k">${esc(k)}</span><span class="v">${v}</span>`).join('')}</div>` : ''}
+  </div>`;
+}
+
+function renderProviders() {
+  $('provNote').textContent = t('prov_note');
+  const wrap = $('provWrap');
+  const a = state.health?.analysis;
+  const GRAY = '#333d4a';
+
+  let html = `<div class="prov-sec-title">${esc(t('prov_direct'))}</div>`;
+  if (!a) {
+    html += '<div class="offline-note">HEALTH API UNAVAILABLE — START BACKEND ON :8000</div>';
+  } else {
+    const anthMode = a.anthropic || 'none';
+    html += provCard({
+      dot: anthMode !== 'none' ? 'var(--green)' : GRAY,
+      name: 'Anthropic · Claude',
+      badge: anthMode === 'oauth' ? t('prov_oauth') : anthMode === 'api_key' ? t('prov_apikey') : t('prov_none'),
+      badgeCls: anthMode !== 'none' ? 'ok' : '',
+      rows: [
+        [t('prov_endpoint'), a.anthropic_base_url
+          ? `<span style="color:var(--orange)">${esc(t('prov_custom_endpoint'))}</span> <span class="mono" style="font-size:10px">(ANTHROPIC_BASE_URL)</span>`
+          : '<span class="mono" style="font-size:10.5px">api.anthropic.com</span>'],
+        [t('prov_model'), '<span class="mono" style="font-size:10.5px">ANTHROPIC_MODEL · claude-sonnet-5</span>'],
+        [t('prov_env'), esc(t('prov_anthropic_hint'))],
+      ],
+    });
+    html += provCard({
+      dot: a.openai_compatible ? 'var(--green)' : GRAY,
+      name: 'OpenAI-Compatible',
+      badge: a.openai_compatible ? t('prov_apikey') : t('prov_none'),
+      badgeCls: a.openai_compatible ? 'ok' : '',
+      rows: [[t('prov_env'), esc(t('prov_openai_hint'))]],
+    });
+    html += provCard({
+      dot: a.gemini ? 'var(--green)' : GRAY,
+      name: 'Google Gemini',
+      badge: a.gemini ? t('prov_apikey') : t('prov_none'),
+      badgeCls: a.gemini ? 'ok' : '',
+      rows: [[t('prov_env'), esc(t('prov_gemini_hint'))]],
+    });
+  }
+
+  html += `<div class="prov-sec-title">${esc(t('prov_cli'))}</div>
+    <div class="offline-note" style="padding:0 2px 8px">${esc(t('prov_cli_hint'))}</div>`;
+  const installedById = Object.fromEntries((a?.cli_providers || []).map((p) => [p.id, p.installed]));
+  const clis = cfgData.cli_providers || [];
+  html += clis.map((p, i) => {
+    const en = p.enabled !== false;
+    const inst = installedById[p.id];
+    const dot = !en ? GRAY : inst ? 'var(--green)' : inst === false ? 'var(--orange)' : GRAY;
+    const badge = !en ? t('prov_disabled') : inst ? t('prov_installed')
+      : inst === false ? t('prov_notinstalled') : t('prov_none');
+    return provCard({
+      dot,
+      name: `<input data-pi="${i}" data-pf="name" value="${esc(p.name || '')}" spellcheck="false">`,
+      badge,
+      badgeCls: en && inst ? 'ok' : en && inst === false ? 'warn' : '',
+      headExtra: `<label class="prov-toggle"><input type="checkbox" data-pi="${i}" data-pf="enabled" ${en ? 'checked' : ''}>${esc(t('prov_enabled_lb'))}</label>
+        <span class="prov-unlink" data-punlink="${i}" title="remove">✕</span>`,
+      rows: [[t('prov_cmd'),
+        `<input class="cfg-input mono" style="font-size:11px" data-pi="${i}" data-pf="command" value="${esc(p.command || '')}" spellcheck="false">`]],
+    });
+  }).join('');
+  html += `<div style="display:flex;gap:8px;padding:6px 0 16px">
+    <button class="btn" id="provAdd">${esc(t('prov_add'))}</button>
+    <button class="btn primary" id="provSave">${esc(t('save_changes'))}</button>
+  </div>`;
+
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('[data-pf]').forEach((el) => {
+    el.addEventListener('input', () => {
+      const item = (cfgData.cli_providers || [])[Number(el.dataset.pi)];
+      if (!item) return;
+      item[el.dataset.pf] = el.type === 'checkbox' ? el.checked : el.value;
+      if (el.type === 'checkbox') renderProviders();
+    });
+  });
+  wrap.querySelectorAll('[data-punlink]').forEach((el) =>
+    el.addEventListener('click', () => {
+      cfgData.cli_providers.splice(Number(el.dataset.punlink), 1);
+      renderProviders();
+    }));
+  $('provAdd')?.addEventListener('click', () => {
+    (cfgData.cli_providers = cfgData.cli_providers || []).push({ enabled: true, name: '', command: '' });
+    renderProviders();
+  });
+  $('provSave')?.addEventListener('click', () => saveSection('cli_providers'));
 }
 
 async function saveSection(key) {
@@ -1578,13 +1832,25 @@ async function saveSection(key) {
 async function loadSettings() {
   renderSettingsChrome();
   try {
-    const res = await fetch(`${API}/config`);
-    const cfg = await res.json();
-    CFG_SECTIONS.forEach((s) => { cfgData[s.key] = (cfg[s.key]?.items || []).map((x) => ({ ...x })); });
-    renderCfgSections();
+    const [cfg, health] = await Promise.all([
+      fetch(`${API}/config`).then((r) => r.json()),
+      fetch(`${API}/health`).then((r) => r.json()).catch(() => null),
+    ]);
+    state.health = health;
+    [...CFG_SECTIONS.map((s) => s.key), 'cli_providers'].forEach((key) => {
+      cfgData[key] = (cfg[key]?.items || []).map((x) => ({ ...x }));
+    });
   } catch (_) {
     $('cfgSections').innerHTML = '<div class="offline-note">CONFIG API UNAVAILABLE</div>';
+    $('provWrap').innerHTML = '<div class="offline-note">CONFIG API UNAVAILABLE</div>';
+    $('provNote').textContent = t('prov_note');
+    const tab = state.setTab;
+    $('setGeneral').style.display = tab === 'general' ? '' : 'none';
+    $('setProviders').style.display = tab === 'providers' ? '' : 'none';
+    $('cfgSections').style.display = (tab !== 'general' && tab !== 'providers') ? '' : 'none';
+    return;
   }
+  renderSetBody();
 }
 
 $('langBtns').querySelectorAll('.btn[data-lang]').forEach((b) =>
@@ -1701,7 +1967,7 @@ function applyLang() {
   document.querySelectorAll('.grid-table th.sortable').forEach((th) => { th.title = t('tt_sort'); });
   // 데이터 뷰 재렌더 (지역명/설명 언어 반영)
   renderWatchlist(); renderMap(); renderFeed();
-  if ($('settingsView').classList.contains('active')) { renderSettingsChrome(); renderCfgSections(); }
+  if ($('settingsView').classList.contains('active')) { renderSettingsChrome(); renderSetBody(); }
   if ($('helpOverlay').classList.contains('open')) renderHelp();
   // 인스펙터 재렌더
   if (state.selected?.type === 'event') selectEvent(state.selected.id);
@@ -1832,6 +2098,7 @@ $('liveDot').addEventListener('click', () => {
   if (saved.sort?.key) state.sort = saved.sort;
   if (saved.lang === 'en' || saved.lang === 'ko') state.lang = saved.lang;
   if (saved.prefs) state.prefs = { ...state.prefs, ...saved.prefs };
+  if (saved.setTab && SET_NAV.some((n) => n.id === saved.setTab)) state.setTab = saved.setTab;
   state.showQuiet = !!saved.showQuiet;
   state.pendingFilters = saved.filters || null;
 

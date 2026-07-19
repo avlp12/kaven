@@ -4,6 +4,50 @@
 
 ---
 
+## v0.0.14 — 2026-07-19
+
+### 핵심: 구독(OAuth) 모델 연결 + zcode 스타일 설정 UI
+
+1. **Anthropic 구독/OAuth 인증** (`src/kaven/anthropic_auth.py`)
+   - 우선순위: `ANTHROPIC_API_KEY`(x-api-key) → `ANTHROPIC_AUTH_TOKEN`
+     (Bearer + `anthropic-beta: oauth-2025-04-20`) → `ant` CLI 프로필
+     (`ant auth print-credentials`, 240초 캐시)
+   - Claude Pro/Max 구독자는 API 키 없이 `ant auth login`만으로 분석 모델 사용
+   - `ANTHROPIC_BASE_URL`로 GLM(지푸)·Kimi 등 Anthropic 호환 엔드포인트 지원,
+     기본 모델 `claude-sonnet-5` (`ANTHROPIC_MODEL`로 변경)
+2. **CLI 구독 브리지** (`src/kaven/cli_providers.py`)
+   - 구독(OAuth) 로그인된 공식 CLI에 분석 위임: Claude Code CLI(Pro/Max),
+     OpenAI Codex CLI(ChatGPT Plus/Pro), Cursor Agent CLI, Gemini CLI
+   - `config.json` `cli_providers` 섹션으로 커스터마이즈 (Grok 등 임의 CLI 등록
+     가능), `KAVEN_CLI_PROVIDER`(auto/off/특정 id) 선택자
+   - 분석 폴백 체인에 편입: OpenAI 호환 → Gemini → Anthropic → CLI 브리지
+     → 규칙 기반
+3. **zcode 스타일 설정 UI 재설계**
+   - 좌측 설정 내비게이션(콘솔/모델/수집·데이터 그룹) + 우측 콘텐츠 페인,
+     선택 탭 localStorage 유지
+   - **모델 공급자 패널**: Direct API 카드(Anthropic·OpenAI 호환·Gemini —
+     상태 점, OAuth·구독/API Key/미설정 배지, 엔드포인트·모델·환경변수 안내)
+     + CLI 브리지 카드(설치됨/미설치/비활성 배지, 인라인 이름·명령 편집,
+     사용 토글, 공급자 추가/해제/저장)
+4. **상태 노출**: `/health`에 `analysis` 필드 (자격증명 값 미노출 —
+   openai_compatible/gemini/anthropic 모드/anthropic_base_url/CLI 설치 여부),
+   System 뷰 SERVICE STATUS에 분석 백엔드 상태 표시
+5. **테스트**: +10건 (인증 우선순위·OAuth 헤더·ant CLI 캐시,
+   CLI 선택자·실행·실패 처리, /health analysis, cli_providers 검증·저장)
+
+### 운영 영향
+- Breaking change 없음 — 자격증명 미설정 시 기존 규칙 기반 분석 그대로 동작
+- API 키 방식(`ANTHROPIC_API_KEY` 등)은 종전과 동일하게 우선 적용
+
+### 검증 결과
+- `ruff check .` → All checks passed / `pytest` → 76 passed (기존 실패 1건 동일)
+- 브라우저 E2E: 설정 내비 9개 탭 전환, 공급자 카드 7종(OAuth·구독 배지,
+  설치됨/미설치 상태 점), CLI 브리지 이름 편집→저장 round-trip,
+  탭 선택 새로고침 유지, EN/KO 전환, System 뷰 ANTHROPIC AUTH=OAUTH 표시,
+  콘솔 에러 0
+
+---
+
 ## v0.0.13 — 2026-07-19
 
 ### 핵심: Settings 전면 확장 — 서버 설정 전 섹션 + 콘솔 환경설정 커스터마이징
