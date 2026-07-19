@@ -1,183 +1,138 @@
-# Kaven
+# KAVEN
 
-**KAVEN = Korean AI-based Vigilance for Event Navigation**
+**KAVEN — Korean AI-based Vigilance for Event Navigation**
 
-Kaven은 AIS/ADS-B/뉴스/소셜 데이터를 수집하고, LLM 분석 + dedup 후 텔레그램 알림/로그 저장까지 수행하는 지정학 조기경보 시스템입니다.
+AIS(해상)·ADS-B(항공)·뉴스·소셜 데이터를 수집하고, LLM 분석과 중복 제거를 거쳐
+severity(1–5) 이벤트를 생성하는 **지정학 조기경보 시스템**입니다.
+텔레그램 경보, Palantir 스타일 웹 작전 콘솔(Ops Console), 그리고
+AI 에이전트 연동(MCP + REST)을 제공합니다.
 
-현재 버전: **0.0.09**
-
-버전 정책:
-- 모든 업데이트 시 버전을 올리고(`0.0.01`부터 시작), 릴리스 노트/알림 헤더/로그 메타데이터에 동일 버전을 표시합니다.
-
-### 최근 업데이트 (v0.0.08)
-- **Ops Console 운영 능률(UX efficiency) 개선** — 프론트엔드 리뷰 후 조정.
-  - **전역 키보드 단축키**: `1`–`5` 뷰 전환, `J`/`K` 이벤트 순회(피드 정렬 순서 따름), `F` 피드+필터 포커스, `R` 수집 실행, `L` LIVE 토글, `Esc` 선택 해제, `?` 단축키 도움말 오버레이.
-  - **상태 지속성(localStorage)**: 마지막 뷰, 피드 필터, 정렬, LIVE 상태, 조용한 AO 표시 여부를 새로고침 후에도 복원.
-  - **데이터 신선도 표시**: 상단바 `SYNC n초 AGO` 실시간 표시, 90초 초과 시 경고색.
-  - **워치리스트 노이즈 감소**: S0·이벤트 0 지역은 접고 `+n QUIET` 토글로 펼침. 자산 클릭 시 Feed로 이동해 해당 자산 필터 자동 적용.
-  - **피드 정렬**: Time/Sev 헤더 클릭 정렬(방향 토글, ▾/▴ 표시).
-  - **인스펙터**: `‹`/`›` 이전·다음 이벤트 탐색, `⧉ JSON` 이벤트 복사 버튼.
-  - **커맨드 팔레트 액션 추가**: "Copy ops briefing (LLM context)" — `/agent/context` 브리핑을 클립보드로 복사.
-
-### 이전 업데이트 (v0.0.07)
-- **AI 에이전트 연동 계층 신설** — 에이전트가 Kaven을 도구로 사용할 수 있게 됨.
-  - **MCP 서버** (`src/kaven/mcp_server.py`): 외부 SDK 의존성 없는 stdio MCP 서버. `kaven_ops_summary`, `kaven_events`, `kaven_agent_context`, `kaven_region`, `kaven_daily_report`, `kaven_portfolio`, `kaven_config`, `kaven_run_collection` 8개 도구 제공. 등록: `claude mcp add kaven -- python -m src.kaven.mcp_server`
-  - **REST `/agent/*`**: `GET /agent/manifest`(엔드포인트/도구/스키마 어휘 카탈로그), `GET /agent/context`(LLM 프롬프트 주입용 압축 브리핑), `GET /agent/events`(평탄화 이벤트 쿼리 + 필터)
-- **전반 리팩토링 — 코어/HTTP 계층 분리**
-  - 중복 로직 단일화: `src/kaven/log_store.py`(JSONL 로그 액세스), `src/kaven/regions.py`(지역 메타), `src/kaven/ops_summary.py`, `src/kaven/aggregates.py`(가이드/지도/포트폴리오 집계), `src/kaven/agent_service.py`
-  - `webapp/backend/app.py`(436줄)를 도메인별 라우터(`webapp/backend/routers/`)로 분리 — app.py는 앱 조립만 담당
-  - `KAVEN_LOG_DIR` 환경변수로 로그 디렉터리 override 가능
-- **버그 수정**: `/report/dates`가 `/report/{date}`에 먼저 매칭되어 400을 반환하던 라우트 순서 버그 수정 (Intel 뷰 날짜 목록 정상화)
-- 테스트: log_store 7건 + agent_service 6건 + mcp_server 7건 신규 (총 54 passed)
-
-### 이전 업데이트 (v0.0.06)
-- **Palantir 스타일 작전 콘솔(Ops Console)로 웹 UI 전면 개편** — 탭 기반 SPA를 Maven Smart System 류의 다중 패널 인텔리전스 콘솔로 재설계.
-  - **COP(Common Operating Picture)**: 다크 전술 지도(Leaflet + CARTO dark) 위에 AIS/ADS-B 감시구역 박스, 지역별 severity 마커(고심각도 펄스 링), 24시간 이벤트 타임라인 스트립. 오프라인 시 SVG 격자 지도로 자동 폴백.
-  - **3-패널 워크스페이스**: 좌측 아이콘 레일(COP/Feed/Intel/Assets/System) + AO 워치리스트 + 우측 인스펙터(이벤트 상세·지역 도시에·7일 스파크라인).
-  - **커맨드 팔레트**(`Ctrl+K` 또는 `/`): 지역·이벤트·자산·뷰 통합 검색/이동.
-  - 상단 바: THREATCON 레벨, UTC/KST 실시간 시계, LIVE(SSE) 토글, Run Collection 버튼.
-- `GET /ops/summary` API 신규 (`webapp/backend/ops.py`) — 지역 상태 + 전체 이벤트(좌표·ID 포함) + 자산 영향 + 감시구역을 단일 payload로 반환. `?date=YYYYMMDD` 지원.
-- 지역 좌표(`REGION_COORDS`)를 `webapp/backend/ops.py`로 이동해 guide/map/ops 엔드포인트가 공유.
-- 테스트: `tests/test_ops_summary.py` 7건 신규.
-
-### 이전 업데이트 (v0.0.04)
-- **감시 구역/피드/키워드 설정 파일화** — 기존에 코드에 하드코딩되어 있던 AIS·ADS-B 감시 구역, 뉴스 RSS/키워드, 소셜 검색어를 전부 `src/kaven/config.json`(선택) 로 외부화했습니다. 각 항목에 `enabled` 플래그를 두어 **선택적 활성화/비활성화** 가능.
-- `src/kaven/config_loader.py` 신규 모듈: 설정 파일 없으면 내장 기본값 fallback. `KAVEN_CONFIG` 환경변수로 경로 override.
-- `src/kaven/config.example.json` 샘플 파일 제공 (바브엘만데브, 동유럽 공역, 연합뉴스 등 `enabled:false` 예시 포함).
-- `/config` API 엔드포인트 신규: 현재 로드된 설정(enabled/disabled 수 포함)을 JSON으로 조회.
-- 4개 collector 전부 리팩터링 — 런타임에 설정을 읽어 활성 항목만 수집.
-- **Codex 리뷰 수정사항 반영** — ruff 11 errors → 0, `pyproject.toml` (ruff/mypy 설정), `requirements.txt`/`requirements-dev.txt` 추가, social_collector `SEARXNG_URL` 환경변수화.
-- 테스트: `tests/test_config_loader.py` 8건 신규 (설정 로드/필터/비활성/오류복원).
-
-### 이전 업데이트 (v0.0.03)
-- **일일 분석 리포트 자동 생성** (`/report`) — JSONL 로그에서 지역별/카테고리별/자산별 집계 + 마크다운 브리핑을 자동 생성. LLM 없이 규칙 기반으로 동작하므로 API 키 불필요. `GET /report`, `GET /report/{YYYYMMDD}`, `GET /report/dates` 엔드포인트 추가.
-- **인터랙티브 분쟁 지도** (`/map`) — globe.gl 3D 지구본에 실시간 이벤트 데이터를 severity별 색상 마커로 표시. 기존 하드코딩 시각화를 `GET /map/data` API 기반으로 교체. 클릭 줌, 자동 회전 지원.
-- **지역별 분쟁 현황 가이드** (`/guide`) — 9개 감시구역(호르무즈, 대만, 한반도 등)의 현재 severity + 설명 + 7일 히스토리 차트. `GET /guide`, `GET /guide/{region}?days=7` 엔드포인트 추가.
-- **프론트엔드 전면 리뉴얼** — 단일 테이블 → 탭 기반 다크 테마 SPA (Dashboard / Report / Map / Guide). Severity 뱃지, 통계 카드, 반응형 레이아웃.
-- `report_generator.py` 모듈 신규 추가 + 테스트 6건 (`tests/test_report_generator.py`).
-
-### 이전 업데이트 (v0.0.02)
-- 이슈 #7 정책 반영: Convex 원격 업로드를 `CONVEX_SITE_URL` 기반 opt-in으로 전환.
-- 하드코딩 엔드포인트 제거, `CONVEX_EVENT_PATH` 환경변수 지원.
-- 정책 회귀 테스트 `tests/test_kaven_convex_policy.py` 9건 추가.
-- `.gitignore` 신규 추가.
-
-### 이전 업데이트 (v0.0.01)
-- 사용자 알림 문구의 `Maven` 표기를 `Kaven`으로 통일했습니다.
-- 실행 로그 파일명을 `kaven_YYYYMMDD.jsonl`로 전환했고, 구버전 `maven_*.jsonl`은 읽기 호환을 유지합니다.
-- 텔레그램 경보 헤더/긴급 경보에 버전(`v0.0.01`)이 표시됩니다.
-- `/health` 응답과 런타임 로그 메타데이터에 버전 필드를 포함합니다.
+현재 버전: **0.0.10** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
 
 ---
 
-## 1) 시스템 개요
+## 화면 (Ops Console)
 
-### 파이프라인
-1. **수집기(collectors)**: AIS, ADS-B, 뉴스, 소셜 데이터 수집
-2. **분석기(analyzer)**: OpenAI 호환(로컬 포함) → Gemini → Anthropic → 규칙기반 폴백 순으로 이벤트 분석
-3. **중복 제거(kaven dedup)**: 텍스트/수치/출처 URL 기반 유사 이벤트 병합
-4. **알림(signal_generator)**: Severity 기준 텔레그램 발송
-5. **저장**: 로컬 JSONL 로그 + Convex 업로드 시도(실패해도 로컬 유지)
+> 지도는 온라인 환경에서 다크 타일맵(Leaflet + CARTO)으로 렌더링됩니다.
+> 아래 캡처는 CDN이 차단된 환경의 **오프라인 SVG 전술 그리드 폴백** 화면입니다.
 
-### 주요 디렉터리
-- `src/kaven/kaven.py`: 메인 실행기 (`--once`, `--watch`)
-- `src/kaven/collectors/`: 데이터 수집기
-- `src/kaven/analyzer.py`: LLM 분석 엔진
-- `src/kaven/signal_generator.py`: 알림 발송
-- `webapp/backend/app.py`: FastAPI API
-- `webapp/frontend/index.html`: 정적 대시보드
-- `tests/`: dedup/로그 리플레이 테스트
+**COP (Common Operating Picture)** — 감시구역 오버레이 + severity 마커 + 24시간 타임라인 + 지역 도시에(7일 스파크라인):
 
----
+![COP](docs/images/cop.png)
 
-## 2) 데이터 수집기 & 감시 구역
+**Event Feed** — 필터·정렬 가능한 이벤트 트리아지 테이블 + 인스펙터(분석 근거·영향 자산·출처):
 
-> **v0.0.04부터**: 감시 구역, RSS 피드, 키워드는 모두 설정 파일로 관리됩니다.
-> 기본값은 코드에 내장되어 있어 설정 파일이 없어도 바로 동작합니다.
-> 커스터마이즈하려면 `src/kaven/config.example.json`을 `src/kaven/config.json`으로 복사해서 편집하세요. 자세한 내용은 **§13 설정(Configuration)** 참조.
+![Event Feed](docs/images/feed.png)
 
-### 2.1 AIS (해상)
-- 파일: `src/kaven/collectors/ais_collector.py`
-- 설정 키: `ais_zones`
-- 기본 감시 지역:
-  - 호르무즈 해협
-  - 말라카 해협
-- 미설정 시 동작:
-  - `AISSTREAM_API_KEY`가 없으면 시뮬레이션 모드로 동작 (활성화된 zone만)
+| Intel Report | Asset Impact |
+|---|---|
+| ![Intel Report](docs/images/intel.png) | ![Asset Impact](docs/images/assets.png) |
+| 규칙 기반 일일 브리핑 (LLM/API 키 불필요) | 자산별 7일 severity 히트맵 + 신호 분포 |
 
-### 2.2 ADS-B (항공)
-- 파일: `src/kaven/collectors/adsb_collector.py`
-- 설정 키: `adsb_zones`
-- 기본 감시 공역:
-  - 중동(이란·이라크·걸프)
-  - 대만 해협
-  - 한반도
-- 인증:
-  - OpenSky는 `OPENSKY_USERNAME`/`OPENSKY_PASSWORD` BasicAuth 사용
-  - 인증값 없으면 비인증 모드(rate limit 더 엄격)
+| Command Palette (`Ctrl+K`) | System / Collection |
+|---|---|
+| ![Command Palette](docs/images/palette.png) | ![System](docs/images/system.png) |
+| 지역·이벤트·자산·뷰·액션 통합 검색 | 감시구역/피드/키워드 수집 상태 보드 |
 
-### 2.3 뉴스
-- 파일: `src/kaven/collectors/news_collector.py`
-- 설정 키: `news_feeds`, `news_keywords`
-- 기본 소스:
-  - Reuters/AP/BBC RSS
-  - 로컬 SearxNG(`SEARXNG_URL`, 기본 `http://localhost:8080`)
+**키보드 단축키** — `?` 키로 콘솔 안에서 언제든 확인:
 
-### 2.4 소셜
-- 파일: `src/kaven/collectors/social_collector.py`
-- 설정 키: `social_keywords`
-- 소스:
-  - SearxNG 검색 우선 (`SEARXNG_URL`)
-  - PinchTab 브라우저 폴백 (`PINCHTAB_URL`, 기본 `http://localhost:9867`)
+![Shortcuts](docs/images/help.png)
 
 ---
 
-## 3) 분석 엔진
+## 목차
 
-- 파일: `src/kaven/analyzer.py`
-- 출력 스키마 핵심 필드:
-  - `event`, `severity(1-5)`, `category`, `signal`, `confidence`, `affected_assets`, `source_url`, `event_time` 등
-- 분석 경로 우선순위:
-  1. **OpenAI 호환 API** (`OPENAI_BASE_URL` 설정 시; 로컬 LLM 가능)
-  2. Gemini API
-  3. Anthropic API
-  4. 규칙 기반 `_fallback_analysis`
-
----
-
-## 4) 기술 스택
-
-- Python 3.11+
-- `aiohttp`, `feedparser`, `websockets`
-- FastAPI + Uvicorn (웹 API)
-- Pytest (테스트)
-- Docker / docker-compose (배포 스캐폴드)
-- systemd 서비스 파일 제공 (`deploy/systemd/kaven.service`)
+1. [주요 기능](#1-주요-기능)
+2. [시스템 아키텍처](#2-시스템-아키텍처)
+3. [빠른 시작](#3-빠른-시작)
+4. [웹 작전 콘솔](#4-웹-작전-콘솔)
+5. [AI 에이전트 연동](#5-ai-에이전트-연동)
+6. [설정](#6-설정)
+7. [API 요약](#7-api-요약)
+8. [프로젝트 구조](#8-프로젝트-구조)
+9. [테스트](#9-테스트)
+10. [운영 / 트러블슈팅](#10-운영--트러블슈팅)
+11. [문서·기여·라이선스](#11-문서기여라이선스)
 
 ---
 
-## 5) 빠른 시작
+## 1) 주요 기능
 
-### 5.1 의존성 설치
+- **4채널 수집** — AIS 선박(호르무즈·말라카 등), ADS-B 항공(중동·대만·한반도),
+  뉴스 RSS(Reuters/AP/BBC + SearxNG), 소셜 검색. 감시구역·피드·키워드는
+  전부 설정 파일로 관리하며 항목별 `enabled` 토글 지원.
+- **LLM 분석 + 규칙 폴백** — OpenAI 호환(로컬 LLM 포함) → Gemini → Anthropic →
+  규칙 기반 순서로 폴백. 출력: `event`, `severity(1-5)`, `category`, `signal`,
+  `confidence`, `affected_assets`, `source_url` 등.
+- **입력 기준 중복 제거** — 새 자극(신규 뉴스 URL, AIS/ADS-B anomaly)이 없으면
+  LLM 호출·발송 자체를 스킵. 텍스트/수치/URL 유사도 기반 이벤트 병합.
+- **텔레그램 경보** — severity 기준 발송, 긴급(5) 별도 헤더.
+- **웹 작전 콘솔** — 다중 패널 인텔리전스 콘솔(위 스크린샷). 실시간 SSE,
+  키보드 중심 운용, 상태 지속성(localStorage).
+- **AI 에이전트 연동** — 의존성 없는 stdio MCP 서버(도구 8개) + `/agent/*` REST.
+  에이전트가 상황 요약·이벤트 쿼리·LLM 브리핑을 도구로 소비 가능.
+- **일일 리포트** — JSONL 로그에서 규칙 기반으로 지역/카테고리/자산 집계 +
+  마크다운 브리핑 자동 생성 (API 키 불필요).
+- **로컬 우선 저장** — JSONL 로그가 원본. 외부 전송(Convex)은 `CONVEX_SITE_URL`
+  명시 설정 시에만 opt-in (이슈 #7 정책).
+
+## 2) 시스템 아키텍처
+
+```
+┌─ 수집(collectors) ─────────────┐
+│ AIS │ ADS-B │ News │ Social    │   config.json (감시구역/피드/키워드, enabled 토글)
+└──────────────┬─────────────────┘
+               ▼
+      입력 게이팅 (새 자극 없으면 스킵)
+               ▼
+┌─ 분석(analyzer) ───────────────┐
+│ OpenAI호환 → Gemini → Anthropic│ → 규칙 기반 폴백
+└──────────────┬─────────────────┘
+               ▼
+      중복 제거(dedup) → severity 이벤트
+               ▼
+┌──────────────┼───────────────────────────┐
+▼              ▼                           ▼
+텔레그램 경보   JSONL 로그 (로컬 원본)      Convex 업로드(opt-in)
+               │
+               ▼  src/kaven/ 코어 (log_store · ops_summary · aggregates · agent_service)
+     ┌─────────┴──────────┐
+     ▼                    ▼
+ FastAPI 웹 API      MCP 서버 (stdio)
+ (webapp/backend)    (python -m src.kaven.mcp_server)
+     ▼                    ▼
+ Ops Console SPA      AI 에이전트 (Claude Code / Desktop 등)
+```
+
+- 도메인 로직은 전부 `src/kaven/` 코어에 있고, 웹 라우터와 MCP 서버는 얇은
+  어댑터 계층입니다. 같은 함수가 HTTP와 MCP 양쪽에서 재사용됩니다.
+
+## 3) 빠른 시작
+
+### 3.1 설치
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
-pip install aiohttp feedparser websockets fastapi uvicorn pytest
+pip install -r requirements.txt          # 운영
+pip install -r requirements-dev.txt      # 개발(+pytest/ruff/mypy)
 ```
 
-### 5.2 `.env` 준비
-Kaven은 `src/kaven/.env`를 자동 로드합니다.
+### 3.2 `.env` 준비 (선택)
+
+Kaven은 `src/kaven/.env`를 자동 로드합니다. **모든 키는 선택**이며, 없으면
+시뮬레이션/비인증/규칙 기반 모드로 동작합니다.
 
 ```bash
 cat > src/kaven/.env <<'ENV'
 # ===== 수집 =====
-OPENSKY_USERNAME=
-OPENSKY_PASSWORD=
+OPENSKY_CLIENT_ID=
+OPENSKY_CLIENT_SECRET=
 AISSTREAM_API_KEY=
 SEARXNG_URL=http://localhost:8080
 
-# ===== 분석 =====
+# ===== 분석 (하나만 있어도 됨; 없으면 규칙 기반) =====
 OPENAI_BASE_URL=
 OPENAI_API_KEY=
 OPENAI_MODEL=
@@ -187,227 +142,78 @@ ANTHROPIC_API_KEY=
 # ===== 알림 =====
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
-TELEGRAM_TOPIC_MAVEN=5052
+TELEGRAM_TOPIC_MAVEN=
 TELEGRAM_USER_DM=
 
-# ===== 원격 백업 (opt-in, 이슈 #7 정책) =====
-# 기본은 로컬 로그만 저장하며 외부 전송은 완전 비활성화됩니다.
-# 필요한 경우에만 CONVEX_SITE_URL을 명시적으로 설정해 opt-in 하세요.
-# CONVEX_EVENT_PATH는 경로 override (기본 /addKavenRun).
+# ===== 원격 백업 (opt-in — 미설정 시 외부 전송 완전 비활성) =====
 CONVEX_SITE_URL=
 CONVEX_EVENT_PATH=/addKavenRun
-
-# ===== 기타 =====
-OPENCLAW_GATEWAY_URL=http://localhost:18789
 ENV
 ```
 
-> 보안 주의: `.env`는 절대 Git에 커밋하지 마세요.
-> 운영 주의 (이슈 #7 정책): `CONVEX_SITE_URL`을 명시적으로 설정하지 않으면 이벤트 payload는 어떤 외부 엔드포인트로도 전송되지 않습니다. 하드코딩된 Convex endpoint는 제거되었으며, 원격 백업이 필요한 경우에만 opt-in 하세요.
+> 보안: `.env`는 절대 커밋하지 마세요. `CONVEX_SITE_URL` 미설정 시 이벤트는
+> 어떤 외부 엔드포인트로도 전송되지 않습니다.
 
-### 5.3 실행
+### 3.3 수집 파이프라인 실행
+
 ```bash
-# 1회 실행
-python src/kaven/kaven.py --once
-
-# 감시 모드 (기본 5분)
-python src/kaven/kaven.py --watch
-
-# 감시 모드 (예: 10분)
+python src/kaven/kaven.py --once            # 1회 실행
+python src/kaven/kaven.py --watch           # 감시 모드 (기본 5분)
 python src/kaven/kaven.py --watch --interval 10
 ```
 
----
+## 4) 웹 작전 콘솔
 
-## 6) 인프라 실행
+### 4.1 실행
 
-### 6.1 로컬 SearxNG (예시)
 ```bash
-docker run --rm -d --name searxng -p 8080:8080 searxng/searxng
-curl -s "http://localhost:8080/search?q=Hormuz&format=json" | head
-```
-
-> macOS + Colima 사용 시 먼저 `colima start` 후 Docker 명령 실행.
-
-### 6.2 docker-compose
-```bash
-cd deploy/docker
-docker compose up -d
-docker compose ps
-```
-
----
-
-## 7) 웹앱
-
-### 백엔드
-```bash
+# 백엔드 (FastAPI)
 uvicorn webapp.backend.app:app --reload --port 8000
-```
 
-### 프론트
-```bash
+# 프론트엔드 (정적 파일)
 python -m http.server 8080 --directory webapp/frontend
 ```
 
-접속: `http://127.0.0.1:8080`
+접속: `http://127.0.0.1:8080` — API 주소가 다르면 `?api=http://호스트:8000`으로 override.
 
----
+### 4.2 화면 구성
 
-## 8) 운영/트러블슈팅
+| 뷰 | 내용 |
+|---|---|
+| **COP** | 전술 지도(감시구역 박스, severity 마커·펄스 링) + 24h 이벤트 타임라인. CDN 불가 시 SVG 그리드 폴백 |
+| **Event Feed** | severity/카테고리/신호/텍스트 필터 + Time/Sev 정렬 테이블 |
+| **Intel Report** | 일일 브리핑 마크다운 (날짜 선택) |
+| **Asset Impact** | 자산별 7일 severity 히트맵 + 신호 분포 |
+| **System** | 수집 파이프라인/감시구역/피드/키워드 상태 보드 |
 
-### 로그/캐시
-- 실행 로그: `src/kaven/logs/kaven_YYYYMMDD.jsonl` (구버전 `maven_*.jsonl`도 읽기 호환)
-- dedup 캐시: `src/kaven/logs/sent_cache.json`
+공통: 좌측 AO 워치리스트(S0 지역은 `+n QUIET` 접기, 자산 클릭 → Feed 필터),
+우측 인스펙터(이벤트 상세·지역 도시에·7일 스파크라인·JSON 복사),
+상단 THREATCON·SYNC 신선도·UTC/KST 시계·LIVE(SSE) 토글.
 
-### 자주 발생하는 문제
-- `CHAT_ID`가 아니라 `TELEGRAM_CHAT_ID`를 써야 함
-- `.env`는 루트가 아니라 `src/kaven/.env`에 있어야 자동 로드됨
-- SearxNG 미구동 시 뉴스/소셜 수집 저하
-- `CONVEX_SITE_URL 미설정 — 외부 전송 스킵` 로그: 정상 동작입니다. 기본 정책(이슈 #7)상 외부 전송은 opt-in이며, 로컬 로그는 이미 저장되어 있습니다. 원격 백업이 필요하면 `CONVEX_SITE_URL`을 설정하세요.
-- `Convex 저장 실패 (로컬 로그는 유지)`가 떠도 로컬 로그는 정상 저장됨 (원격 실패는 예외로 전파되지 않음)
+### 4.3 키보드 단축키
 
-### 텔레그램 FAQ
-- 텔레그램 봇 생성, `TELEGRAM_CHAT_ID`/토픽 ID 확인, DM 설정, 오류 해결은 아래 문서를 참고하세요.
-- 문서: `docs/telegram-faq.md`
+| 키 | 동작 |
+|---|---|
+| `1`–`5` | 뷰 전환 (COP / Feed / Intel / Assets / System) |
+| `Ctrl+K`, `/` | 커맨드 팔레트 (검색·이동·액션) |
+| `J` / `K` | 다음 / 이전 이벤트 선택 |
+| `F` | Feed 이동 + 텍스트 필터 포커스 |
+| `R` | 수집 파이프라인 1회 실행 |
+| `L` | LIVE(SSE) 스트림 토글 |
+| `Esc` | 선택 해제 / 오버레이 닫기 |
+| `?` | 단축키 도움말 |
 
----
+뷰·필터·정렬·LIVE 상태는 localStorage에 저장되어 새로고침 후 복원됩니다.
 
-## 9) 테스트
+## 5) AI 에이전트 연동
 
-```bash
-# 전체 테스트
-make test
+### 5.1 MCP 서버 (권장)
 
-# Kaven 핵심 테스트
-make test-kaven
-
-# 직접 실행
-pytest -q
-```
-
----
-
-## 10) 라이선스
-
-이 프로젝트는 **MIT License**를 사용합니다.
-
-- 개인/상업적 사용, 수정, 재배포를 자유롭게 허용합니다.
-- 단, 배포 시 저작권 고지와 라이선스 본문(`LICENSE`)을 포함해야 합니다.
-
----
-
-## 11) 기여(Contributing)
-
-1. 이슈 또는 변경 목적을 먼저 정리합니다.
-2. 기능 브랜치를 생성합니다.
-3. 코드 변경 후 `pytest -q`를 통과시킵니다.
-4. 문서(README/운영 가이드)도 함께 업데이트합니다.
-5. PR에 변경 이유/테스트 결과/운영 영향도를 명확히 작성합니다.
-
----
-
-## 12) 추가 문서
-
-- `src/kaven/README.md`
-- `webapp/README.md`
-- `docs/release-notes.md`
-- `docs/webapp-checklist.md`
-- `docs/telegram-faq.md`
-- `deploy/systemd/kaven.service`
-- `deploy/docker/docker-compose.yml`
-
----
-
-## 13) 설정 (Configuration)
-
-v0.0.04부터 감시 구역, RSS 피드, 뉴스·소셜 키워드를 JSON 설정 파일로 관리합니다.
-
-### 13.1 설정 파일 위치
-
-탐색 순서:
-1. `KAVEN_CONFIG` 환경변수가 가리키는 경로
-2. `src/kaven/config.json` (기본)
-3. 파일 없으면 내장 기본값 사용 (기존 동작과 완전 호환)
-
-### 13.2 설정 파일 생성
+외부 SDK 의존성 없는 stdio MCP 서버를 내장합니다. 로그 디렉터리만 읽으므로
+API 키 없이 동작합니다(`kaven_run_collection` 제외).
 
 ```bash
-cp src/kaven/config.example.json src/kaven/config.json
-# 편집 후 재시작
-python src/kaven/kaven.py --once
-```
-
-### 13.3 스키마
-
-```json
-{
-  "ais_zones": [
-    {"id": "hormuz", "name": "호르무즈 해협", "enabled": true,
-     "lat_min": 25.5, "lat_max": 27.0, "lon_min": 56.0, "lon_max": 57.5, "baseline_ships": 50},
-    {"id": "malacca", "name": "말라카 해협", "enabled": false, ...}
-  ],
-  "adsb_zones": [
-    {"id": "middle_east", "name": "중동", "enabled": true,
-     "lat_min": 24.0, "lat_max": 38.0, "lon_min": 44.0, "lon_max": 62.0}
-  ],
-  "news_feeds": [
-    {"id": "reuters_world", "name": "Reuters World", "enabled": true,
-     "url": "https://feeds.reuters.com/Reuters/worldNews"}
-  ],
-  "news_keywords": [
-    {"id": "iran_military", "query": "Iran military", "enabled": true}
-  ],
-  "social_keywords": [
-    {"id": "iran_hormuz", "query": "Iran Hormuz", "enabled": true}
-  ]
-}
-```
-
-### 13.4 각 항목의 `enabled` 플래그
-
-- `true` (기본): 해당 구역/피드/키워드 활성화
-- `false`: 수집에서 제외하지만 설정 파일에는 유지 (나중에 다시 활성화 가능)
-- 플래그 미지정 시 `true`로 간주
-
-### 13.5 현재 설정 확인
-
-```bash
-# 웹 API로 현재 활성/비활성 항목 조회
-curl http://127.0.0.1:8000/config
-```
-
-### 13.7 로그 디렉터리 override
-
-- `KAVEN_LOG_DIR` 환경변수로 JSONL 로그 디렉터리를 변경할 수 있습니다 (기본 `src/kaven/logs`).
-
-### 13.6 부분 override
-
-설정 파일에 특정 섹션만 포함해도 됩니다. 예를 들어 AIS 구역만 커스터마이즈하고 싶으면:
-
-```json
-{
-  "ais_zones": [
-    {"id": "bab_el_mandeb", "name": "바브엘만데브", "enabled": true,
-     "lat_min": 12.0, "lat_max": 14.0, "lon_min": 42.5, "lon_max": 44.0}
-  ]
-}
-```
-
-→ `ais_zones`만 치환되고 나머지(`adsb_zones`, `news_feeds`, 등)는 내장 기본값 사용.
-
----
-
-## 14) AI 에이전트 연동 (Agent Integration)
-
-v0.0.07부터 AI 에이전트가 Kaven을 도구로 사용할 수 있습니다.
-
-### 14.1 MCP 서버 (권장)
-
-외부 SDK 의존성 없는 stdio MCP 서버를 내장합니다.
-
-```bash
-# Claude Code에 등록 (저장소 루트에서)
+# Claude Code (저장소 루트에서)
 claude mcp add kaven -- python -m src.kaven.mcp_server
 ```
 
@@ -424,8 +230,6 @@ claude mcp add kaven -- python -m src.kaven.mcp_server
 }
 ```
 
-제공 도구 (8개):
-
 | 도구 | 설명 |
 |---|---|
 | `kaven_ops_summary` | 통합 상황 요약 (위협 수준·지역·이벤트·자산·감시구역) |
@@ -437,20 +241,133 @@ claude mcp add kaven -- python -m src.kaven.mcp_server
 | `kaven_config` | 수집 설정 조회 |
 | `kaven_run_collection` | 수집 파이프라인 1회 즉시 실행 |
 
-### 14.2 REST API
-
-웹 백엔드 구동 중이면 HTTP로도 동일 기능을 사용할 수 있습니다.
+### 5.2 REST
 
 ```bash
-# 에이전트 디스커버리 — 엔드포인트/도구/스키마 어휘 카탈로그
-curl http://127.0.0.1:8000/agent/manifest
-
-# LLM 컨텍스트 주입용 압축 브리핑
-curl "http://127.0.0.1:8000/agent/context?severity_min=3&max_events=10"
-
-# 평탄화 이벤트 쿼리
+curl http://127.0.0.1:8000/agent/manifest                          # 디스커버리 카탈로그
+curl "http://127.0.0.1:8000/agent/context?severity_min=3"          # LLM 브리핑
 curl "http://127.0.0.1:8000/agent/events?region=korea&severity_min=4"
 ```
 
-- OpenAPI 스키마: `GET /openapi.json` (Swagger UI: `/docs`)
-- 이벤트 스키마 어휘(지역 코드, 카테고리, 신호, severity 의미)는 `/agent/manifest`의 `vocabulary` 필드 참조.
+이벤트 스키마 어휘(지역 코드·카테고리·신호·severity 의미)는
+`/agent/manifest`의 `vocabulary` 필드를 참조하세요.
+콘솔의 커맨드 팔레트에도 "Copy ops briefing (LLM context)" 액션이 있습니다.
+
+## 6) 설정
+
+### 6.1 감시구역/피드/키워드 (`config.json`)
+
+탐색 순서: `KAVEN_CONFIG` 환경변수 경로 → `src/kaven/config.json` → 내장 기본값.
+
+```bash
+cp src/kaven/config.example.json src/kaven/config.json   # 편집 후 재시작
+```
+
+지원 섹션: `ais_zones`, `adsb_zones`, `news_feeds`, `news_keywords`,
+`social_keywords`. 각 항목의 `enabled: false`로 수집에서 제외(파일에는 유지),
+특정 섹션만 넣으면 해당 섹션만 치환됩니다. 현재 로드 상태는 `GET /config`으로 확인.
+
+```json
+{
+  "ais_zones": [
+    {"id": "hormuz", "name": "호르무즈 해협", "enabled": true,
+     "lat_min": 25.5, "lat_max": 27.0, "lon_min": 56.0, "lon_max": 57.5,
+     "baseline_ships": 50}
+  ]
+}
+```
+
+### 6.2 주요 환경변수
+
+| 변수 | 용도 | 기본값 |
+|---|---|---|
+| `KAVEN_CONFIG` | 설정 파일 경로 override | `src/kaven/config.json` |
+| `KAVEN_LOG_DIR` | JSONL 로그 디렉터리 (읽기/쓰기 공통) | `src/kaven/logs` |
+| `SEARXNG_URL` | 뉴스/소셜 검색 엔진 | `http://localhost:8080` |
+| `OPENAI_BASE_URL` 외 | 분석 LLM (§3.2 참조) | 규칙 기반 폴백 |
+| `TELEGRAM_*` | 경보 발송 | 미발송 |
+| `CONVEX_SITE_URL` | 원격 백업 opt-in | 비활성 |
+
+## 7) API 요약
+
+FastAPI 문서: `GET /docs` (Swagger UI), `GET /openapi.json`
+
+| 엔드포인트 | 설명 |
+|---|---|
+| `GET /health` | 헬스체크 + 버전 |
+| `GET /ops/summary?date=` | 콘솔용 통합 요약 (지역+이벤트+자산+감시구역) |
+| `GET /agent/manifest` · `/agent/context` · `/agent/events` | AI 에이전트 연동 (§5) |
+| `GET /runs` · `/runs/latest` · `/runs/files` · `/runs/dates` | 실행 로그 조회 (+필터) |
+| `POST /runs/once` | 수집 파이프라인 1회 실행 |
+| `GET /runs/stream` | SSE 실시간 run 스트림 |
+| `GET /report` · `/report/dates` · `/report/{YYYYMMDD}` | 일일 리포트 |
+| `GET /guide` · `/guide/{region}?days=` | 지역 가이드 + 히스토리 |
+| `GET /map/data` | 지도 마커 데이터 |
+| `GET /portfolio` · `/portfolio/{asset}` | 자산 영향 집계 |
+| `GET /config` | 수집 설정 조회 |
+
+## 8) 프로젝트 구조
+
+```
+src/kaven/
+├── kaven.py            # 메인 실행기 (--once / --watch), dedup, 발송, 저장
+├── collectors/         # ais / adsb / news / social 수집기
+├── analyzer.py         # LLM 분석 엔진 (다단계 폴백)
+├── signal_generator.py # 텔레그램 경보
+├── config_loader.py    # 감시구역/피드/키워드 설정 로더
+├── log_store.py        # JSONL 로그 액세스 단일 소스 (KAVEN_LOG_DIR)
+├── regions.py          # 지역 메타데이터 + 스키마 어휘 단일 소스
+├── ops_summary.py      # COP 통합 집계
+├── aggregates.py       # 가이드/지도/포트폴리오 집계
+├── report_generator.py # 규칙 기반 일일 리포트
+├── agent_service.py    # 에이전트 쿼리·컨텍스트·매니페스트
+└── mcp_server.py       # stdio MCP 서버 (의존성 없음)
+
+webapp/
+├── backend/app.py      # FastAPI 앱 조립 (CORS + 라우터 연결만)
+├── backend/routers/    # system / runs / ops / agent / intel / portfolio
+└── frontend/index.html # Ops Console SPA (단일 파일, vanilla JS)
+
+tests/                  # pytest (에이전트/MCP/집계/설정/dedup 등)
+docs/                   # release-notes, 운영 문서, README 이미지
+deploy/                 # Dockerfile, docker-compose, systemd 유닛
+```
+
+## 9) 테스트
+
+```bash
+make test          # 전체
+make test-kaven    # 핵심(dedup/policy)
+pytest -q          # 직접 실행
+ruff check .       # 린트
+```
+
+> 참고: `test_kaven_log_replay_integration.py` 1건은 v0.0.05 저장소 위생
+> 작업(운영 로그 추적 해제)으로 샘플 로그가 없는 환경에서 실패합니다 — 기존
+> 알려진 이슈로 코드 결함이 아닙니다.
+
+## 10) 운영 / 트러블슈팅
+
+- **로그**: `src/kaven/logs/kaven_YYYYMMDD.jsonl` (구 `maven_*.jsonl` 읽기 호환),
+  dedup 캐시 `sent_cache.json`. `KAVEN_LOG_DIR`로 위치 변경 가능.
+- **인프라 예시**:
+  ```bash
+  docker run --rm -d --name searxng -p 8080:8080 searxng/searxng   # 검색 엔진
+  cd deploy/docker && docker compose up -d                          # compose 스캐폴드
+  ```
+- **자주 발생하는 문제**
+  - `TELEGRAM_CHAT_ID`를 써야 함 (`CHAT_ID` 아님) — 상세: [`docs/telegram-faq.md`](docs/telegram-faq.md)
+  - `.env`는 루트가 아니라 `src/kaven/.env`에 있어야 자동 로드됨
+  - SearxNG 미구동 시 뉴스/소셜 수집 저하
+  - `CONVEX_SITE_URL 미설정 — 외부 전송 스킵` 로그는 **정상 동작** (opt-in 정책)
+  - 콘솔 지도가 "OFFLINE GRID MODE"로 보이면 CDN(unpkg/CARTO) 접근 불가 환경 —
+    기능은 동일하게 동작하며 온라인에서 타일맵으로 전환됨
+
+## 11) 문서·기여·라이선스
+
+- 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) (버전 정책: 모든 업데이트마다 버전 상승)
+- 웹앱 상세: [`webapp/README.md`](webapp/README.md) · 코어 상세: [`src/kaven/README.md`](src/kaven/README.md)
+- 운영 체크리스트: [`docs/webapp-checklist.md`](docs/webapp-checklist.md) · 텔레그램: [`docs/telegram-faq.md`](docs/telegram-faq.md)
+- **기여**: 기능 브랜치 → `pytest -q`·`ruff check .` 통과 → 문서/릴리스 노트 갱신 → PR
+  (변경 이유·테스트 결과·운영 영향 명시)
+- **라이선스**: [MIT](LICENSE) — 자유로운 사용/수정/재배포, 저작권 고지 유지
