@@ -7,18 +7,22 @@ severity(1–5) 이벤트를 생성하는 **지정학 조기경보 시스템**�
 텔레그램 경보, Palantir 스타일 웹 작전 콘솔(Ops Console), 그리고
 AI 에이전트 연동(MCP + REST)을 제공합니다.
 
-현재 버전: **0.0.10** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
+현재 버전: **0.0.11** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
 
 ---
 
 ## 화면 (Ops Console)
 
-> 지도는 온라인 환경에서 다크 타일맵(Leaflet + CARTO)으로 렌더링됩니다.
-> 아래 캡처는 CDN이 차단된 환경의 **오프라인 SVG 전술 그리드 폴백** 화면입니다.
+> 지도는 **내장 벡터 월드맵**(Natural Earth 110m + 로컬 번들 Leaflet)으로
+> 렌더링됩니다 — CDN·타일 서버 없이 오프라인에서도 항상 동일하게 동작합니다.
 
-**COP (Common Operating Picture)** — 감시구역 오버레이 + severity 마커 + 24시간 타임라인 + 지역 도시에(7일 스파크라인):
+**COP (Common Operating Picture)** — 벡터 월드맵 + 감시구역 오버레이 + severity 마커 + 24시간 타임라인 + 지역 도시에(7일 스파크라인):
 
 ![COP](docs/images/cop.png)
+
+**AO 줌** — 감시구역 확대 (한반도 ADS-B 구역 + S5 이벤트 마커):
+
+![COP zoom](docs/images/cop-zoom.png)
 
 **Event Feed** — 필터·정렬 가능한 이벤트 트리아지 테이블 + 인스펙터(분석 근거·영향 자산·출처):
 
@@ -180,7 +184,7 @@ python -m http.server 8080 --directory webapp/frontend
 
 | 뷰 | 내용 |
 |---|---|
-| **COP** | 전술 지도(감시구역 박스, severity 마커·펄스 링) + 24h 이벤트 타임라인. CDN 불가 시 SVG 그리드 폴백 |
+| **COP** | 내장 벡터 월드맵(Natural Earth, 오프라인 동작) 위 감시구역 박스·severity 마커·펄스 링 + 24h 이벤트 타임라인 |
 | **Event Feed** | severity/카테고리/신호/텍스트 필터 + Time/Sev 정렬 테이블 |
 | **Intel Report** | 일일 브리핑 마크다운 (날짜 선택) |
 | **Asset Impact** | 자산별 7일 severity 히트맵 + 신호 분포 |
@@ -360,8 +364,8 @@ ruff check .       # 린트
   - `.env`는 루트가 아니라 `src/kaven/.env`에 있어야 자동 로드됨
   - SearxNG 미구동 시 뉴스/소셜 수집 저하
   - `CONVEX_SITE_URL 미설정 — 외부 전송 스킵` 로그는 **정상 동작** (opt-in 정책)
-  - 콘솔 지도가 "OFFLINE GRID MODE"로 보이면 CDN(unpkg/CARTO) 접근 불가 환경 —
-    기능은 동일하게 동작하며 온라인에서 타일맵으로 전환됨
+  - 콘솔 지도는 로컬 번들(Leaflet + Natural Earth)로 렌더링되므로 인터넷 연결이
+    필요 없음. 기반 지도 데이터: Natural Earth (public domain)
 
 ## 11) 문서·기여·라이선스
 

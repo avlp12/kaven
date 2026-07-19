@@ -4,7 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KAVEN // OPS CONSOLE</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%2310141a'/%3E%3Cpath d='M3 2h2.5v5L10 2h3L8.5 7 13 14h-3L5.5 9v5H3z' fill='%234c90f0'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="vendor/leaflet.css" />
   <style>
     /* ═══ Palantir Blueprint dark palette ═══ */
     :root {
@@ -199,7 +200,7 @@
     #mapLegend .sw { width: 9px; height: 9px; border-radius: 50%; }
     #mapLegend .zw { width: 12px; height: 8px; border: 1px dashed; border-radius: 1px; }
 
-    .leaflet-container { font-family: var(--sans); }
+    .leaflet-container { font-family: var(--sans); background: #0a0e14; }
     .leaflet-control-attribution { background: #10141aaa !important; color: var(--dim) !important; font-size: 9px !important; }
     .leaflet-control-attribution a { color: var(--dim) !important; }
     .leaflet-bar a { background: var(--bg2) !important; color: var(--muted) !important; border-color: var(--border) !important; }
@@ -460,6 +461,7 @@
             <div class="li"><span class="sw" style="background:#4c90f0"></span>SEV 1-2 MONITOR</div>
             <div class="li"><span class="zw" style="border-color:#3fc6da"></span>ADS-B ZONE</div>
             <div class="li"><span class="zw" style="border-color:#32a467"></span>AIS ZONE</div>
+            <div class="li" style="color:#3c4654;margin-top:2px">BASEMAP · NATURAL EARTH</div>
           </div>
         </div>
         <div id="timeline">
@@ -562,7 +564,8 @@
 
 <div id="toasts"></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="vendor/leaflet.js"></script>
+<script src="vendor/topojson-client.min.js"></script>
 <script>
 'use strict';
 
@@ -687,12 +690,24 @@ const hasLeaflet = typeof L !== 'undefined';
 function initMap() {
   if (!hasLeaflet) { $('map').innerHTML = ''; return; }
   map = L.map('map', {
-    center: [26, 80], zoom: 3, minZoom: 2, maxZoom: 10,
-    zoomControl: true, attributionControl: true, worldCopyJump: true,
+    center: [26, 80], zoom: 3, minZoom: 2, maxZoom: 8,
+    zoomControl: true, attributionControl: false,
+    maxBounds: [[-85, -181], [85, 181]], maxBoundsViscosity: 0.8,
   });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd',
-  }).addTo(map);
+  // 내장 벡터 월드맵 (Natural Earth 110m, 로컬 데이터) — CDN/타일 서버 불필요.
+  // 이벤트 마커(overlayPane, z=400)보다 아래에 깔리도록 전용 pane 사용.
+  map.createPane('world');
+  map.getPane('world').style.zIndex = 250;
+  fetch('data/countries-110m.json')
+    .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+    .then((topo) => {
+      if (typeof topojson === 'undefined') return;
+      L.geoJSON(topojson.feature(topo, topo.objects.countries), {
+        pane: 'world', interactive: false,
+        style: { color: '#2e3a48', weight: 0.7, opacity: 1, fillColor: '#161d27', fillOpacity: 1 },
+      }).addTo(map);
+    })
+    .catch(() => { /* 국경 데이터 로드 실패 시 다크 배경 + 마커만으로 동작 */ });
   mapLayers.zones = L.layerGroup().addTo(map);
   mapLayers.markers = L.layerGroup().addTo(map);
 }
@@ -745,8 +760,32 @@ function renderMap() {
   });
 }
 
-/* offline SVG fallback — graticule + zones + region dots */
+/* SVG fallback (Leaflet 로드 실패 시) — 국경 윤곽 + graticule + zones + region dots */
+let svgWorldPaths = null;  // 국경 path 캐시 ('' = 로드 실패)
+async function loadSvgWorld() {
+  if (typeof topojson === 'undefined') { svgWorldPaths = ''; return; }
+  try {
+    const topo = await (await fetch('data/countries-110m.json')).json();
+    const geo = topojson.feature(topo, topo.objects.countries);
+    const X = (lng) => ((lng + 180) / 360 * 1000).toFixed(1);
+    const Y = (lat) => ((90 - lat) / 180 * 500).toFixed(1);
+    const rings = [];
+    geo.features.forEach((f) => {
+      const g = f.geometry;
+      if (!g) return;
+      const polys = g.type === 'Polygon' ? [g.coordinates]
+        : g.type === 'MultiPolygon' ? g.coordinates : [];
+      polys.forEach((poly) => poly.forEach((r) =>
+        rings.push('M' + r.map((p) => `${X(p[0])},${Y(p[1])}`).join('L') + 'Z')));
+    });
+    svgWorldPaths = `<path d="${rings.join(' ')}" fill="#161d27" stroke="#2e3a48" stroke-width="0.5" fill-rule="evenodd"/>`;
+  } catch (_) { svgWorldPaths = ''; }
+}
+
 function renderSvgMap(ops) {
+  if (svgWorldPaths === null) {
+    loadSvgWorld().then(() => { if (state.ops) renderSvgMap(state.ops); });
+  }
   const X = (lng) => (lng + 180) / 360 * 1000;
   const Y = (lat) => (90 - lat) / 180 * 500;
   let g = '';
@@ -767,8 +806,8 @@ function renderSvgMap(ops) {
     mks += `<circle cx="${X(r.lng)}" cy="${Y(r.lat)}" r="${rad}" fill="${s.c}" fill-opacity="0.5" stroke="${s.c}"
       style="cursor:pointer" data-region="${r.code}"><title>${esc(r.name)} · SEV ${r.severity}</title></circle>`;
   });
-  $('map').innerHTML = `<svg id="svgMap" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet">${g}${z}${mks}</svg>
-    <div class="offline-note" style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%)">OFFLINE GRID MODE — MAP TILES UNAVAILABLE</div>`;
+  $('map').innerHTML = `<svg id="svgMap" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet">${g}${svgWorldPaths || ''}${z}${mks}</svg>
+    <div class="offline-note" style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%)">STATIC GRID MODE — MAP LIBRARY UNAVAILABLE</div>`;
   $('map').querySelectorAll('circle[data-region]').forEach((c) =>
     c.addEventListener('click', () => selectRegion(c.dataset.region, false)));
 }
