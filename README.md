@@ -38,15 +38,21 @@ AI 에이전트 연동(MCP + REST)을 제공합니다.
 | ![Command Palette](docs/images/palette.png) | ![System](docs/images/system.png) |
 | 지역·이벤트·자산·뷰·액션 통합 검색 | 감시구역/피드/키워드 수집 상태 보드 |
 
-| Settings — 모델 공급자 (구독/OAuth) | Settings — 수집 설정 편집 |
-|---|---|
-| ![Settings Providers](docs/images/settings.png) | ![Settings Collection](docs/images/settings-collection.png) |
-| 좌측 설정 내비 + 공급자 카드: OAuth·구독/API Key 상태 배지, CLI 브리지 인라인 편집 | 자산/지역/감시구역/피드/키워드 전 섹션 인라인 편집 → `config.json` 저장 |
+**Settings — zcode 스타일 설정 콘솔** (좌측 내비: 콘솔/모델/수집·데이터 그룹, 선택 탭 유지):
 
-| COP — English mode | 단축키 도움말 (`?`) |
+| Settings — 모델 공급자 (구독/OAuth) | Settings — 일반·콘솔 환경설정 |
 |---|---|
-| ![COP English](docs/images/cop-en.png) | ![Shortcuts](docs/images/help.png) |
-| 언어 전환 시 지역명·설명·도움말이 영어로 표시 | 콘솔 안에서 언제든 확인 |
+| ![Settings Providers](docs/images/settings.png) | ![Settings General](docs/images/settings-general.png) |
+| 공급자 카드: OAuth·구독/API Key 상태 배지, 설치됨/미설치 상태 점, CLI 브리지 인라인 편집·추가·해제 | 언어 전환 + 시작 화면·새로고침 주기·지도 severity·오버레이·펄스·API 주소 |
+
+| Settings — 수집 설정 편집 | COP — English mode |
+|---|---|
+| ![Settings Collection](docs/images/settings-collection.png) | ![COP English](docs/images/cop-en.png) |
+| 자산/지역/감시구역/피드/키워드 전 섹션 인라인 편집 → `config.json` 저장 | 언어 전환 시 지역명·설명·도움말이 영어로 표시 |
+
+**키보드 단축키** — `?` 키로 콘솔 안에서 언제든 확인:
+
+![Shortcuts](docs/images/help.png)
 
 ---
 
