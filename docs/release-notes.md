@@ -4,6 +4,189 @@
 
 ---
 
+## v0.0.09 — 2026-07-19
+
+### 핵심: 3-렌즈(정확성·보안·프론트엔드) 검증에서 발견된 14건 수정
+
+머지 전 브랜치 전체 diff(v0.0.06–08)를 세 관점의 독립 리뷰로 검증하고
+확인된 결함을 전부 수정.
+
+**정확성 렌즈 (3건)**
+1. MED `kaven.py` — `KAVEN_LOG_DIR`이 읽기에만 적용되고 쓰기(`run_once`)는
+   하드코딩 경로 사용 → 읽기/쓰기 모두 `log_store.default_log_dir()` 사용으로 통일
+2. LOW `mcp_server.py` — id 없는 요청(notification)에 `id:null` 응답 발생
+   → JSON-RPC 2.0 규격대로 무응답 처리
+3. LOW `agent_service.py` — `limit=0`이 1건을 반환 → 0건(카운터만) 반환
+
+**보안 렌즈 (3건)**
+4. MED `index.html` — `source_url`의 `javascript:` 스킴이 href로 그대로 렌더링
+   (외부 뉴스/LLM 출력 유래 XSS) → http/https만 링크화, 그 외 텍스트 표시
+5. MED `mcp_server.py` — stdin으로 비객체 JSON(`5`, `[]`) 수신 시 루프 크래시
+   → `-32600 invalid request` 응답으로 보호
+6. LOW `mcp_server.py` — `date` 인자 미검증(HTTP 라우터와 비대칭)
+   → 동일한 YYYYMMDD 검증 적용
+
+**프론트엔드 렌즈 (8건)**
+7. MED — SSE (재)연결 직후 가짜 "NEW RUN INGESTED" 토스트+리로드
+   → run_id 추적으로 첫 스냅샷/중복 무시
+8. MED — `selectRegion` 히스토리 fetch 레이스(늦은 응답이 다른 선택 덮어씀)
+   → await 후 선택 일치 검사
+9. MED — `/guide` 실패 시 스파크라인 "LOADING…" 영구 고착
+   → "HISTORY UNAVAILABLE" 표시
+10. MED — 백엔드 다운 시 60초마다 에러 토스트 스팸
+    → 상태 전환 시에만 토스트(다운/복구 각 1회)
+11. LOW — Run/새 run 후 Intel 날짜 목록 캐시 미무효화 → 무효화 추가
+12. LOW — System 뷰 중복 `style` 속성 → 병합
+13. LOW — 전 지역 quiet일 때 보이지 않는 토글이 상태를 바꾸던 문제 → 가드
+14. LOW — 필터 복원 값이 옵션에 없으면 셀렉트가 빈 표시 → ALL로 복귀
+
+### 검증 결과
+- `ruff check .` → All checks passed
+- `pytest` → 58 passed (+회귀 테스트 4건: MCP non-dict/notification/date 검증,
+  limit=0), 기존 log replay 실패 1건 동일
+- 브라우저 확인: LIVE 연결 8초간 가짜 토스트 0건, 스파크라인 정상 렌더링
+- `KAVEN_LOG_DIR` 설정 시 쓰기 경로가 env를 따르는 것 확인
+
+---
+
+## v0.0.08 — 2026-07-18
+
+### 핵심: Ops Console 운영 능률(UX efficiency) 리뷰·조정
+
+프론트엔드(`webapp/frontend/index.html`) 사용성 리뷰에서 찾은 비효율을 개선.
+백엔드 변경 없음.
+
+1. **전역 키보드 단축키** (마우스 의존 제거)
+   - `1`–`5` 뷰 전환, `Ctrl+K`/`/` 커맨드 팔레트, `J`/`K` 다음·이전 이벤트
+     (현재 피드 필터·정렬 순서 기준, 피드에서 선택 행 자동 스크롤)
+   - `F` Feed 이동+텍스트 필터 포커스, `R` 수집 1회 실행, `L` LIVE 토글
+   - `Esc` 선택 해제/오버레이 닫기, `?` 단축키 도움말 오버레이 (레일 버튼도 추가)
+   - 입력 필드 포커스 중에는 단축키 비활성 (오입력 방지)
+2. **상태 지속성 (localStorage)**
+   - 마지막 뷰, 피드 필터(severity/카테고리/신호/텍스트), 정렬 기준,
+     LIVE 상태, 조용한 AO 표시 여부를 저장하고 새로고침 시 복원
+3. **데이터 신선도 표시**
+   - 상단바 `SYNC nS AGO` 매초 갱신, 90초 초과 시 경고색 — 스트림 끊김을
+     즉시 인지 가능
+4. **워치리스트 스캔 노이즈 감소**
+   - severity 0·이벤트 0 지역은 기본 접힘, `+n QUIET` 토글로 펼침
+     (데이터가 아예 없는 날은 전체 표시 유지)
+   - 자산 행 클릭 → Feed로 전환 + 해당 자산명 필터 자동 적용 (조사 동선 단축)
+5. **피드 정렬**
+   - Time/Sev 헤더 클릭으로 정렬 컬럼/방향 토글 (▾/▴ 인디케이터)
+6. **인스펙터**
+   - 헤더 `‹`/`›` 버튼(또는 J/K)으로 이전·다음 이벤트 순회
+   - `⧉ JSON` 버튼: 선택 이벤트 전체 필드를 클립보드로 복사
+7. **커맨드 팔레트 액션 추가**
+   - "Copy ops briefing (LLM context)": `/agent/context` 응답의 마크다운
+     브리핑을 클립보드로 복사 — 에이전트/보고서 워크플로 연결
+
+### 검증 결과
+- Playwright(Chromium) E2E: 키보드 내비게이션(J/K 선택·2번 키 뷰 전환),
+  Sev 정렬, 도움말 오버레이, QUIET 토글(3→9행), 자산 클릭 필터(WTI 1행),
+  새로고침 후 뷰·필터 복원, SYNC 인디케이터 — 전부 통과, 콘솔 에러 0
+- `ruff check .` / `pytest` — 백엔드 변경 없음, 이전과 동일 (54 passed)
+
+---
+
+## v0.0.07 — 2026-07-18
+
+### 핵심: AI 에이전트 연동 계층 + 코어/HTTP 전반 리팩토링
+
+1. **MCP 서버** (`src/kaven/mcp_server.py`, 신규)
+   - 외부 SDK 의존성 없는 stdio MCP 서버 (개행 구분 JSON-RPC 2.0 직접 구현)
+   - 도구 8개: `kaven_ops_summary`, `kaven_events`, `kaven_agent_context`,
+     `kaven_region`, `kaven_daily_report`, `kaven_portfolio`, `kaven_config`,
+     `kaven_run_collection`
+   - 등록: `claude mcp add kaven -- python -m src.kaven.mcp_server`
+   - heavy import(수집기 체인)는 `kaven_run_collection` 호출 시점에만 지연 로드
+2. **에이전트 REST API** (`/agent/*`, 신규)
+   - `GET /agent/manifest` — 엔드포인트/MCP 도구/스키마 어휘(지역 코드,
+     카테고리, 신호, severity 의미) 기계가독 카탈로그
+   - `GET /agent/context` — LLM 프롬프트 주입용 압축 마크다운 브리핑
+     (`date`, `max_events`, `severity_min`)
+   - `GET /agent/events` — run 중첩 없는 평탄화 이벤트 쿼리
+     (severity/지역/카테고리/신호/키워드 필터 + 중복 제거 + 좌표/ID enrichment)
+3. **전반 리팩토링 — 코어와 HTTP 계층 분리**
+   - `src/kaven/log_store.py` 신규: JSONL 로그 탐색/파싱/중복제거 단일 소스
+     (app.py·report_generator·ops에 3중복이던 로직 통합), `KAVEN_LOG_DIR` env 지원
+   - `src/kaven/regions.py` 신규: 지역 좌표/한글명/설명 + 스키마 어휘 단일 소스
+   - `src/kaven/ops_summary.py`: `webapp/backend/ops.py`에서 코어로 이동
+     (+`enrich_event` 공용화)
+   - `src/kaven/aggregates.py` 신규: 가이드/지도/포트폴리오 집계 (app.py에서 이동)
+   - `src/kaven/agent_service.py` 신규: 이벤트 쿼리·컨텍스트·매니페스트
+   - `webapp/backend/app.py` 436줄 → 40줄 (앱 조립만), 엔드포인트는
+     `webapp/backend/routers/{system,runs,ops,agent,intel,portfolio}.py`로 분리
+   - webapp import 시 수집기 의존성(feedparser 등)이 더 이상 필요 없음
+     (`run_once`는 `POST /runs/once` 호출 시점 지연 로드)
+4. **버그 수정**
+   - `/report/dates`가 `/report/{date}` 경로 파라미터에 먼저 매칭되어 항상
+     400을 반환하던 라우트 순서 버그 수정 → Intel 뷰 날짜 목록 정상화
+   - `GET /runs/dates` 신규 (로그 존재 날짜 목록)
+5. **테스트**
+   - `tests/test_log_store.py` 7건, `tests/test_agent_service.py` 6건,
+     `tests/test_mcp_server.py` 7건 신규. `test_ops_summary.py`는 이동된
+     모듈 경로로 갱신
+
+### 운영 영향
+- 기존 REST API 경로/응답 변경 없음 (신규 엔드포인트만 추가)
+- `webapp.backend.ops` 모듈은 `src.kaven.ops_summary`로 이동 (직접 import하던
+  경우에만 경로 수정 필요)
+- MCP 서버는 로그 디렉터리만 읽으므로 API 키 없이 동작 (`kaven_run_collection` 제외)
+
+### 검증 결과
+- `ruff check .` → All checks passed
+- `python3 -m pytest -q` → 54 passed, 1 failed (기존 log replay 이슈, v0.0.06 노트 참조)
+- uvicorn 구동 후 전 엔드포인트 curl 스모크 테스트 + MCP stdio 세션
+  (initialize → tools/list → tools/call) E2E 확인 + 프론트 브라우저 리그레션 확인
+
+---
+
+## v0.0.06 — 2026-07-18
+
+### 핵심: Palantir Maven 스타일 작전 콘솔(Ops Console) UX 전면 개편
+
+`webapp/frontend/index.html`을 탭 기반 SPA에서 Maven Smart System 류의
+다중 패널 인텔리전스 콘솔로 재설계.
+
+1. **COP (Common Operating Picture)**
+   - Leaflet + CARTO 다크 타일 기반 전술 지도
+   - AIS(녹색)/ADS-B(청록) 감시구역 bounding box 오버레이 (비활성 구역은 흐리게)
+   - 지역별 severity 마커: 크기·색상 스케일, severity ≥ 4는 펄스 링 애니메이션
+   - 지도 하단 24시간 이벤트 타임라인 스트립 (UTC 축, 클릭 → 인스펙터)
+   - CDN 불가(오프라인) 시 SVG 격자 지도로 자동 폴백
+2. **3-패널 워크스페이스**
+   - 좌측 아이콘 레일: COP / Event Feed / Intel Report / Asset Impact / System
+   - 좌측 워치리스트: AO(감시 지역) severity 정렬 목록 + 영향 자산 목록
+   - 우측 인스펙터: 이벤트 상세(메타 테이블·분석 근거·출처 링크·지도 이동),
+     지역 도시에(설명·7일 severity 스파크라인·당일 이벤트 목록)
+3. **커맨드 팔레트** (`Ctrl+K` 또는 `/`)
+   - 지역·이벤트·자산·뷰·액션 통합 검색, 키보드 내비게이션
+4. **상단 커맨드 바**
+   - THREATCON 레벨(당일 최대 severity), RUNS/EVENTS/UNIQUE 카운터
+   - UTC/KST 실시간 시계, LIVE(SSE) 토글, Run Collection 버튼, 토스트 알림
+5. **백엔드**
+   - `GET /ops/summary` 신규 (`webapp/backend/ops.py::build_ops_summary`)
+     — 지역 상태 + 전체 이벤트(좌표·안정적 ID 포함) + 자산 영향 + 감시구역
+     단일 payload. `?date=YYYYMMDD` 지원.
+   - `REGION_COORDS`를 `ops.py`로 이동, `app.py`는 alias로 하위호환 유지
+6. **테스트**
+   - `tests/test_ops_summary.py` 7건 신규 (빈 날짜, 좌표/ID 부여, 지역 정렬,
+     자산 집계, dedup, watchzone 포함, 미등록 지역 안전 처리)
+
+### 운영 영향
+- Breaking change 없음: 기존 API 전부 유지, 신규 엔드포인트만 추가
+- 프론트 접속 방법 동일 (`http://127.0.0.1:8080`), API 주소는 `?api=` 쿼리로 override 가능
+- 지도 타일은 CARTO CDN 사용(브라우저에서 로드). 오프라인 환경에서는 SVG 폴백 동작
+
+### 검증 결과
+- `ruff check .` → All checks passed
+- `python3 -m pytest -q` → 34 passed, 1 failed
+  (실패 1건은 기존 `test_kaven_log_replay_integration.py` — v0.0.05 저장소 위생 작업으로
+  운영 로그 `logs/maven_20260403.jsonl`가 추적 해제되어 발생하는 기존 이슈, 본 변경과 무관)
+
+---
+
 ## v0.0.05 — 2026-07-03
 
 ### 핵심: 입력기준 중복제거(input-gating)로 알림 노이즈 제거

@@ -4,12 +4,43 @@
 
 Kaven은 AIS/ADS-B/뉴스/소셜 데이터를 수집하고, LLM 분석 + dedup 후 텔레그램 알림/로그 저장까지 수행하는 지정학 조기경보 시스템입니다.
 
-현재 버전: **0.0.04**
+현재 버전: **0.0.09**
 
 버전 정책:
 - 모든 업데이트 시 버전을 올리고(`0.0.01`부터 시작), 릴리스 노트/알림 헤더/로그 메타데이터에 동일 버전을 표시합니다.
 
-### 최근 업데이트 (v0.0.04)
+### 최근 업데이트 (v0.0.08)
+- **Ops Console 운영 능률(UX efficiency) 개선** — 프론트엔드 리뷰 후 조정.
+  - **전역 키보드 단축키**: `1`–`5` 뷰 전환, `J`/`K` 이벤트 순회(피드 정렬 순서 따름), `F` 피드+필터 포커스, `R` 수집 실행, `L` LIVE 토글, `Esc` 선택 해제, `?` 단축키 도움말 오버레이.
+  - **상태 지속성(localStorage)**: 마지막 뷰, 피드 필터, 정렬, LIVE 상태, 조용한 AO 표시 여부를 새로고침 후에도 복원.
+  - **데이터 신선도 표시**: 상단바 `SYNC n초 AGO` 실시간 표시, 90초 초과 시 경고색.
+  - **워치리스트 노이즈 감소**: S0·이벤트 0 지역은 접고 `+n QUIET` 토글로 펼침. 자산 클릭 시 Feed로 이동해 해당 자산 필터 자동 적용.
+  - **피드 정렬**: Time/Sev 헤더 클릭 정렬(방향 토글, ▾/▴ 표시).
+  - **인스펙터**: `‹`/`›` 이전·다음 이벤트 탐색, `⧉ JSON` 이벤트 복사 버튼.
+  - **커맨드 팔레트 액션 추가**: "Copy ops briefing (LLM context)" — `/agent/context` 브리핑을 클립보드로 복사.
+
+### 이전 업데이트 (v0.0.07)
+- **AI 에이전트 연동 계층 신설** — 에이전트가 Kaven을 도구로 사용할 수 있게 됨.
+  - **MCP 서버** (`src/kaven/mcp_server.py`): 외부 SDK 의존성 없는 stdio MCP 서버. `kaven_ops_summary`, `kaven_events`, `kaven_agent_context`, `kaven_region`, `kaven_daily_report`, `kaven_portfolio`, `kaven_config`, `kaven_run_collection` 8개 도구 제공. 등록: `claude mcp add kaven -- python -m src.kaven.mcp_server`
+  - **REST `/agent/*`**: `GET /agent/manifest`(엔드포인트/도구/스키마 어휘 카탈로그), `GET /agent/context`(LLM 프롬프트 주입용 압축 브리핑), `GET /agent/events`(평탄화 이벤트 쿼리 + 필터)
+- **전반 리팩토링 — 코어/HTTP 계층 분리**
+  - 중복 로직 단일화: `src/kaven/log_store.py`(JSONL 로그 액세스), `src/kaven/regions.py`(지역 메타), `src/kaven/ops_summary.py`, `src/kaven/aggregates.py`(가이드/지도/포트폴리오 집계), `src/kaven/agent_service.py`
+  - `webapp/backend/app.py`(436줄)를 도메인별 라우터(`webapp/backend/routers/`)로 분리 — app.py는 앱 조립만 담당
+  - `KAVEN_LOG_DIR` 환경변수로 로그 디렉터리 override 가능
+- **버그 수정**: `/report/dates`가 `/report/{date}`에 먼저 매칭되어 400을 반환하던 라우트 순서 버그 수정 (Intel 뷰 날짜 목록 정상화)
+- 테스트: log_store 7건 + agent_service 6건 + mcp_server 7건 신규 (총 54 passed)
+
+### 이전 업데이트 (v0.0.06)
+- **Palantir 스타일 작전 콘솔(Ops Console)로 웹 UI 전면 개편** — 탭 기반 SPA를 Maven Smart System 류의 다중 패널 인텔리전스 콘솔로 재설계.
+  - **COP(Common Operating Picture)**: 다크 전술 지도(Leaflet + CARTO dark) 위에 AIS/ADS-B 감시구역 박스, 지역별 severity 마커(고심각도 펄스 링), 24시간 이벤트 타임라인 스트립. 오프라인 시 SVG 격자 지도로 자동 폴백.
+  - **3-패널 워크스페이스**: 좌측 아이콘 레일(COP/Feed/Intel/Assets/System) + AO 워치리스트 + 우측 인스펙터(이벤트 상세·지역 도시에·7일 스파크라인).
+  - **커맨드 팔레트**(`Ctrl+K` 또는 `/`): 지역·이벤트·자산·뷰 통합 검색/이동.
+  - 상단 바: THREATCON 레벨, UTC/KST 실시간 시계, LIVE(SSE) 토글, Run Collection 버튼.
+- `GET /ops/summary` API 신규 (`webapp/backend/ops.py`) — 지역 상태 + 전체 이벤트(좌표·ID 포함) + 자산 영향 + 감시구역을 단일 payload로 반환. `?date=YYYYMMDD` 지원.
+- 지역 좌표(`REGION_COORDS`)를 `webapp/backend/ops.py`로 이동해 guide/map/ops 엔드포인트가 공유.
+- 테스트: `tests/test_ops_summary.py` 7건 신규.
+
+### 이전 업데이트 (v0.0.04)
 - **감시 구역/피드/키워드 설정 파일화** — 기존에 코드에 하드코딩되어 있던 AIS·ADS-B 감시 구역, 뉴스 RSS/키워드, 소셜 검색어를 전부 `src/kaven/config.json`(선택) 로 외부화했습니다. 각 항목에 `enabled` 플래그를 두어 **선택적 활성화/비활성화** 가능.
 - `src/kaven/config_loader.py` 신규 모듈: 설정 파일 없으면 내장 기본값 fallback. `KAVEN_CONFIG` 환경변수로 경로 override.
 - `src/kaven/config.example.json` 샘플 파일 제공 (바브엘만데브, 동유럽 공역, 연합뉴스 등 `enabled:false` 예시 포함).
@@ -346,6 +377,10 @@ python src/kaven/kaven.py --once
 curl http://127.0.0.1:8000/config
 ```
 
+### 13.7 로그 디렉터리 override
+
+- `KAVEN_LOG_DIR` 환경변수로 JSONL 로그 디렉터리를 변경할 수 있습니다 (기본 `src/kaven/logs`).
+
 ### 13.6 부분 override
 
 설정 파일에 특정 섹션만 포함해도 됩니다. 예를 들어 AIS 구역만 커스터마이즈하고 싶으면:
@@ -360,3 +395,62 @@ curl http://127.0.0.1:8000/config
 ```
 
 → `ais_zones`만 치환되고 나머지(`adsb_zones`, `news_feeds`, 등)는 내장 기본값 사용.
+
+---
+
+## 14) AI 에이전트 연동 (Agent Integration)
+
+v0.0.07부터 AI 에이전트가 Kaven을 도구로 사용할 수 있습니다.
+
+### 14.1 MCP 서버 (권장)
+
+외부 SDK 의존성 없는 stdio MCP 서버를 내장합니다.
+
+```bash
+# Claude Code에 등록 (저장소 루트에서)
+claude mcp add kaven -- python -m src.kaven.mcp_server
+```
+
+```json
+// claude_desktop_config.json
+{
+  "mcpServers": {
+    "kaven": {
+      "command": "python",
+      "args": ["-m", "src.kaven.mcp_server"],
+      "cwd": "/path/to/kaven"
+    }
+  }
+}
+```
+
+제공 도구 (8개):
+
+| 도구 | 설명 |
+|---|---|
+| `kaven_ops_summary` | 통합 상황 요약 (위협 수준·지역·이벤트·자산·감시구역) |
+| `kaven_events` | 평탄화 이벤트 쿼리 (severity/지역/카테고리/신호/키워드 필터) |
+| `kaven_agent_context` | LLM 프롬프트 주입용 압축 마크다운 브리핑 |
+| `kaven_region` | 지역 상세 + 최근 N일 severity 히스토리 |
+| `kaven_daily_report` | 규칙 기반 일일 브리핑 (마크다운) |
+| `kaven_portfolio` | 자산별 투자 영향 집계 |
+| `kaven_config` | 수집 설정 조회 |
+| `kaven_run_collection` | 수집 파이프라인 1회 즉시 실행 |
+
+### 14.2 REST API
+
+웹 백엔드 구동 중이면 HTTP로도 동일 기능을 사용할 수 있습니다.
+
+```bash
+# 에이전트 디스커버리 — 엔드포인트/도구/스키마 어휘 카탈로그
+curl http://127.0.0.1:8000/agent/manifest
+
+# LLM 컨텍스트 주입용 압축 브리핑
+curl "http://127.0.0.1:8000/agent/context?severity_min=3&max_events=10"
+
+# 평탄화 이벤트 쿼리
+curl "http://127.0.0.1:8000/agent/events?region=korea&severity_min=4"
+```
+
+- OpenAPI 스키마: `GET /openapi.json` (Swagger UI: `/docs`)
+- 이벤트 스키마 어휘(지역 코드, 카테고리, 신호, severity 의미)는 `/agent/manifest`의 `vocabulary` 필드 참조.
