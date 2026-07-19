@@ -1,0 +1,65 @@
+name: Release
+
+# docs/release-manifest.json에 정의된 버전 중 아직 GitHub Release가 없는
+# 항목을 생성한다 (태그도 함께 생성됨). 릴리스 본문은 docs/release-notes.md의
+# 해당 버전 섹션에서 추출.
+#
+# 새 버전 릴리스 절차: release-notes.md에 섹션 추가 + release-manifest.json에
+# {tag, commit, date} 추가 → main 머지 시 자동 실행 (또는 수동 dispatch).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/release-manifest.json
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create missing GitHub releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, re, subprocess, tempfile
+
+          manifest = json.load(open("docs/release-manifest.json", encoding="utf-8"))
+          md = open("docs/release-notes.md", encoding="utf-8").read()
+
+          sections = {}
+          parts = re.split(r"^## (v0\.0\.\d+) — (\S+)\s*$", md, flags=re.M)
+          for i in range(1, len(parts) - 2, 3):
+              ver, date, body = parts[i], parts[i + 1], parts[i + 2]
+              sections[ver] = body.split("\n---")[0].strip()
+
+          for entry in manifest:  # 매니페스트 순서(과거→최신)대로 생성 → 최신이 Latest
+              tag, commit = entry["tag"], entry["commit"]
+              exists = subprocess.run(
+                  ["gh", "release", "view", tag],
+                  capture_output=True).returncode == 0
+              if exists:
+                  print(f"skip (exists): {tag}")
+                  continue
+              notes = sections.get(tag, f"Kaven {tag}")
+              notes = f"_Released {entry.get('date', '')}_\n\n{notes}"
+              with tempfile.NamedTemporaryFile(
+                      "w", suffix=".md", delete=False, encoding="utf-8") as f:
+                  f.write(notes)
+                  path = f.name
+              subprocess.run(
+                  ["gh", "release", "create", tag,
+                   "--target", commit, "--title", f"Kaven {tag}",
+                   "--notes-file", path],
+                  check=True)
+              os.unlink(path)
+              print(f"created: {tag} -> {commit[:7]}")
+          PYEOF

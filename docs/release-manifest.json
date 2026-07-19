@@ -1,0 +1,57 @@
+[
+  {
+    "tag": "v0.0.01",
+    "commit": "aebc3f27fb67b60e82d578fb9b38e86bd9ad37fe",
+    "date": "2026-04-07"
+  },
+  {
+    "tag": "v0.0.02",
+    "commit": "4100cfe4038e909c0ad5bac86dc45314950567e4",
+    "date": "2026-04-11"
+  },
+  {
+    "tag": "v0.0.03",
+    "commit": "1f0f581f11a662b7a1dd406f32a435c56fc2913d",
+    "date": "2026-04-13"
+  },
+  {
+    "tag": "v0.0.04",
+    "commit": "241b89f867b9860055b3bd6cb51dfc1c6a6d9459",
+    "date": "2026-04-14"
+  },
+  {
+    "tag": "v0.0.05",
+    "commit": "cc26e630ef9b530c475a9034041ba67a4a9a008e",
+    "date": "2026-07-04"
+  },
+  {
+    "tag": "v0.0.06",
+    "commit": "ca5a735a653d32ed5a8462667fc713187252dcd9",
+    "date": "2026-07-18"
+  },
+  {
+    "tag": "v0.0.07",
+    "commit": "c4e9463a4ef7df6cb08ccfdafc91d76e60a44b43",
+    "date": "2026-07-18"
+  },
+  {
+    "tag": "v0.0.08",
+    "commit": "27c34a566b8b327b81495db8de7c519ea153d2a3",
+    "date": "2026-07-18"
+  },
+  {
+    "tag": "v0.0.09",
+    "commit": "a4c71785af95b44ac0ff3795bfaa7f92bcd97b55",
+    "date": "2026-07-19"
+  },
+  {
+    "tag": "v0.0.10",
+    "commit": "4fac4332c127fcd5330c67e50402dc612223b7ee",
+    "date": "2026-07-19"
+  },
+  {
+    "tag": "v0.0.11",
+    "commit": "d8e582647be671cae08023fd3e575169372731b2",
+    "date": "2026-07-19"
+  }
+]
