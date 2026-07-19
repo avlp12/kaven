@@ -84,3 +84,26 @@ def test_tools_call_unknown_tool_is_tool_error():
 def test_unknown_method_returns_jsonrpc_error():
     resp = handle_message({"jsonrpc": "2.0", "id": 6, "method": "resources/list"})
     assert resp["error"]["code"] == -32601
+
+
+def test_non_dict_message_returns_invalid_request():
+    """비객체 JSON(숫자/배열)이 와도 크래시 없이 -32600 응답."""
+    for bad in (5, "x", [1, 2]):
+        resp = handle_message(bad)
+        assert resp["error"]["code"] == -32600
+
+
+def test_request_without_id_gets_no_response():
+    """JSON-RPC 2.0: notification(id 없음)에는 어떤 메서드든 응답 금지."""
+    assert handle_message({"jsonrpc": "2.0", "method": "ping"}) is None
+    assert handle_message({"jsonrpc": "2.0", "method": "tools/list"}) is None
+
+
+def test_invalid_date_argument_is_tool_error():
+    """date 인자는 HTTP 라우터와 동일하게 YYYYMMDD 검증."""
+    resp = handle_message({
+        "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+        "params": {"name": "kaven_ops_summary", "arguments": {"date": "../../etc"}},
+    })
+    assert resp["result"]["isError"] is True
+    assert "YYYYMMDD" in resp["result"]["content"][0]["text"]

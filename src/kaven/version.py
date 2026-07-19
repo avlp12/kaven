@@ -1,4 +1,4 @@
 """Kaven version information."""
 
-__version__ = "0.0.08"
+__version__ = "0.0.09"
 

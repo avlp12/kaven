@@ -73,6 +73,14 @@ def test_query_events_limit():
     assert result["events"][0]["severity"] == 5
 
 
+def test_query_events_limit_zero_returns_counters_only():
+    """limit=0은 이벤트 본문 없이 카운터만 반환."""
+    result = query_events(_make_log_dir(), date=_DATE, limit=0)
+    assert result["matched"] == 3
+    assert result["returned"] == 0
+    assert result["events"] == []
+
+
 def test_agent_context_contains_briefing_sections():
     ctx = build_agent_context(_make_log_dir(), date=_DATE)
     assert ctx["threat_level"] == 5

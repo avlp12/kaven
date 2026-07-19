@@ -590,6 +590,8 @@ const state = {
   showQuiet: false,                     // S0 지역 표시 여부
   lastSync: 0,                          // 마지막 데이터 동기화 시각
   pendingFilters: null,                 // localStorage에서 복원 대기 중인 필터
+  lastRunId: null,                      // SSE 재연결 시 중복 run_update 무시용
+  opsDown: false,                       // 백엔드 다운 상태 (토스트 중복 방지)
 };
 
 /* ═══════════ persistence (localStorage) ═══════════ */
@@ -864,6 +866,7 @@ function renderWatchlist() {
     }));
 }
 $('aoToggle').addEventListener('click', () => {
+  if (!$('aoToggle').textContent) return;  // 토글이 보이지 않을 때는 상태를 바꾸지 않음
   state.showQuiet = !state.showQuiet;
   persist({ showQuiet: state.showQuiet });
   renderWatchlist();
@@ -941,6 +944,7 @@ function populateFeedFilters() {
     const cur = sel.value;
     sel.innerHTML = `<option value="">${label}: ALL</option>` + opts.map((o) => `<option>${esc(o)}</option>`).join('');
     sel.value = cur;
+    if (sel.selectedIndex === -1) sel.value = '';  // 사라진 옵션이면 ALL로 (빈 셀렉트 방지)
   };
   keep($('fCat'), cats, 'CATEGORY');
   keep($('fSig'), sigs, 'SIGNAL');
@@ -988,7 +992,9 @@ function selectEvent(id) {
     </div>` : ''}
     ${e.source_url ? `<div class="insp-sec">
       <div class="k mono" style="font-size:9px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase;margin-bottom:7px">Source</div>
-      <a class="src-link" href="${esc(e.source_url)}" target="_blank" rel="noopener">${esc(e.source_url)}</a>
+      ${/^https?:\/\//i.test(e.source_url)
+        ? `<a class="src-link" href="${esc(e.source_url)}" target="_blank" rel="noopener">${esc(e.source_url)}</a>`
+        : `<span class="src-link" style="color:var(--dim);cursor:default" title="비HTTP 스킴 — 링크 비활성">${esc(e.source_url)}</span>`}
     </div>` : ''}
     <div class="insp-sec">
       <button class="btn" id="inspLocate">◎ Locate on map</button>
@@ -1055,23 +1061,25 @@ async function selectRegion(code, fly) {
     d.addEventListener('click', () => selectEvent(d.dataset.id)));
 
   // 7-day sparkline via /guide/{region}
+  let hist = null;
   try {
-    let hist = state.regionHistoryCache[code];
+    hist = state.regionHistoryCache[code];
     if (!hist) {
       const res = await fetch(`${API}/guide/${code}?days=7`);
       if (res.ok) { hist = (await res.json()).history || []; state.regionHistoryCache[code] = hist; }
     }
-    const spark = $('inspSpark');
-    if (spark && hist) {
-      spark.innerHTML = hist.map((h) => {
-        const hs = sevOf(h.max_severity);
-        return `<div class="col" title="${h.date} · SEV ${h.max_severity} · ${h.event_count} EVT">
-          <div class="bar" style="height:${Math.max(4, h.max_severity * 20)}%;background:${hs.c}"></div>
-          <span class="dt">${h.date.slice(8)}</span>
-        </div>`;
-      }).join('');
-    }
-  } catch (_) { /* offline */ }
+  } catch (_) { /* offline — hist stays null */ }
+  // await 사이에 다른 객체가 선택됐으면 늦게 도착한 응답은 버린다 (race 방지)
+  if (state.selected?.type !== 'region' || state.selected.code !== code) return;
+  const spark = $('inspSpark');
+  if (!spark) return;
+  spark.innerHTML = hist ? hist.map((h) => {
+    const hs = sevOf(h.max_severity);
+    return `<div class="col" title="${h.date} · SEV ${h.max_severity} · ${h.event_count} EVT">
+      <div class="bar" style="height:${Math.max(4, h.max_severity * 20)}%;background:${hs.c}"></div>
+      <span class="dt">${h.date.slice(8)}</span>
+    </div>`;
+  }).join('') : '<span class="offline-note" style="padding:0">HISTORY UNAVAILABLE</span>';
 }
 
 /* ═══════════ intel report ═══════════ */
@@ -1181,7 +1189,7 @@ async function loadSystem() {
     const secTitle = { ais_zones: 'AIS WATCHZONES (MARITIME)', adsb_zones: 'ADS-B WATCHZONES (AIR)', news_feeds: 'NEWS FEEDS', news_keywords: 'NEWS KEYWORDS', social_keywords: 'SOCIAL KEYWORDS' };
     let html = `<div class="sys-sec"><div class="hd"><span>SERVICE STATUS</span>
       <span style="color:var(--green)">● ${esc(health.status).toUpperCase()} · v${esc(health.version)}</span></div>
-      <div style="padding:10px 12px" class="mono" style="font-size:11px">
+      <div class="mono" style="padding:10px 12px;font-size:11px">
         <span style="color:var(--dim)">API</span> ${esc(API)}</div></div>`;
     for (const [key, sec] of Object.entries(cfg)) {
       html += `<div class="sys-sec"><div class="hd"><span>${secTitle[key] || key.toUpperCase()}</span>
@@ -1317,11 +1325,15 @@ async function loadOps(showToast) {
       if (p.cat) $('fCat').value = p.cat;
       if (p.sig) $('fSig').value = p.sig;
       if (p.q) $('fQuery').value = p.q;
+      // 복원 값이 현재 옵션에 없으면 ALL로 되돌림 (빈 셀렉트 방지)
+      ['fSev', 'fCat', 'fSig'].forEach((id) => { if ($(id).selectedIndex === -1) $(id).value = ''; });
     }
     renderFeed();
+    if (state.opsDown) { state.opsDown = false; toast('OPS API RECONNECTED', 'var(--green)'); }
     if (showToast) toast(`OPS PICTURE UPDATED · ${state.ops.totals.unique_events} EVENTS`, 'var(--green)');
   } catch (err) {
-    toast('OPS API UNAVAILABLE — START BACKEND ON :8000', 'var(--red)');
+    // 다운 상태 전환 시에만 토스트 (60초 폴링마다 스팸 방지)
+    if (!state.opsDown) { state.opsDown = true; toast('OPS API UNAVAILABLE — START BACKEND ON :8000', 'var(--red)'); }
     console.error(err);
   }
 }
@@ -1333,6 +1345,7 @@ $('runBtn').addEventListener('click', async () => {
   try {
     await fetch(`${API}/runs/once`, { method: 'POST' });
     state.regionHistoryCache = {};
+    reportDatesLoaded = false;  // Intel 날짜 목록 갱신 유도
     await loadOps(true);
   } catch (_) { toast('RUN FAILED — BACKEND UNREACHABLE', 'var(--red)'); }
   btn.disabled = false; btn.textContent = '▸ Run Collection';
@@ -1352,7 +1365,15 @@ $('liveDot').addEventListener('click', () => {
       try {
         const msg = JSON.parse(ev.data);
         if (msg.type === 'run_update') {
+          const rid = msg.run?.run_id;
+          // 서버는 (재)연결 직후 현재 run을 항상 1회 보내므로,
+          // 이미 아는 id는 무시하고 첫 스냅샷은 조용히 기록만 한다
+          if (rid && rid === state.lastRunId) return;
+          const isFirstSnapshot = state.lastRunId == null;
+          state.lastRunId = rid || state.lastRunId;
+          if (isFirstSnapshot) return;
           state.regionHistoryCache = {};
+          reportDatesLoaded = false;
           loadOps(false);
           toast('NEW RUN INGESTED — PICTURE REFRESHED', 'var(--blue)');
         }

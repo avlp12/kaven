@@ -50,9 +50,11 @@ def _tool_run_collection() -> dict[str, Any]:
 
 
 def call_tool(name: str, args: dict[str, Any]) -> Any:
-    """도구 이름 → 코어 함수 디스패치. 미등록 도구는 ValueError."""
+    """도구 이름 → 코어 함수 디스패치. 미등록 도구/잘못된 인자는 ValueError."""
     log_dir = default_log_dir()
     date = args.get("date")
+    if date is not None and (len(str(date)) != 8 or not str(date).isdigit()):
+        raise ValueError(f"date must be YYYYMMDD, got: {date!r}")
 
     if name == "kaven_ops_summary":
         return build_ops_summary(log_dir, date)
@@ -115,9 +117,18 @@ def handle_message(msg: dict[str, Any]) -> dict[str, Any] | None:
 
     지원 메서드: initialize, ping, tools/list, tools/call.
     """
+    if not isinstance(msg, dict):
+        # 유효한 JSON이지만 객체가 아닌 입력(숫자/문자열/배열)으로부터 루프 보호
+        return _error(None, -32600, "invalid request: message must be an object")
+
     method = msg.get("method", "")
     msg_id = msg.get("id")
     is_notification = "id" not in msg
+
+    if method.startswith("notifications/"):
+        return None
+    if is_notification:
+        return None  # JSON-RPC 2.0: notification(id 없음)에는 어떤 응답도 금지
 
     if method == "initialize":
         return _result(msg_id, {
@@ -125,8 +136,6 @@ def handle_message(msg: dict[str, Any]) -> dict[str, Any] | None:
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {"name": "kaven", "version": __version__},
         })
-    if method.startswith("notifications/"):
-        return None
     if method == "ping":
         return _result(msg_id, {})
     if method == "tools/list":
@@ -147,8 +156,6 @@ def handle_message(msg: dict[str, Any]) -> dict[str, Any] | None:
                 "isError": True,
             })
 
-    if is_notification:
-        return None
     return _error(msg_id, -32601, f"method not found: {method}")
 
 

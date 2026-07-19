@@ -45,9 +45,11 @@ def _load_env_file(env_path: Path) -> None:
 
 _load_env_file(SCRIPT_DIR / ".env")
 
-# 로깅 설정
-LOG_DIR = SCRIPT_DIR / "logs"
-LOG_DIR.mkdir(exist_ok=True)
+# 로깅 설정 — KAVEN_LOG_DIR 환경변수 override 지원 (읽기/쓰기 동일 경로 보장)
+from src.kaven.log_store import default_log_dir  # noqa: E402
+
+LOG_DIR = default_log_dir()
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
     level=logging.INFO,

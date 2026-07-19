@@ -4,6 +4,51 @@
 
 ---
 
+## v0.0.09 — 2026-07-19
+
+### 핵심: 3-렌즈(정확성·보안·프론트엔드) 검증에서 발견된 14건 수정
+
+머지 전 브랜치 전체 diff(v0.0.06–08)를 세 관점의 독립 리뷰로 검증하고
+확인된 결함을 전부 수정.
+
+**정확성 렌즈 (3건)**
+1. MED `kaven.py` — `KAVEN_LOG_DIR`이 읽기에만 적용되고 쓰기(`run_once`)는
+   하드코딩 경로 사용 → 읽기/쓰기 모두 `log_store.default_log_dir()` 사용으로 통일
+2. LOW `mcp_server.py` — id 없는 요청(notification)에 `id:null` 응답 발생
+   → JSON-RPC 2.0 규격대로 무응답 처리
+3. LOW `agent_service.py` — `limit=0`이 1건을 반환 → 0건(카운터만) 반환
+
+**보안 렌즈 (3건)**
+4. MED `index.html` — `source_url`의 `javascript:` 스킴이 href로 그대로 렌더링
+   (외부 뉴스/LLM 출력 유래 XSS) → http/https만 링크화, 그 외 텍스트 표시
+5. MED `mcp_server.py` — stdin으로 비객체 JSON(`5`, `[]`) 수신 시 루프 크래시
+   → `-32600 invalid request` 응답으로 보호
+6. LOW `mcp_server.py` — `date` 인자 미검증(HTTP 라우터와 비대칭)
+   → 동일한 YYYYMMDD 검증 적용
+
+**프론트엔드 렌즈 (8건)**
+7. MED — SSE (재)연결 직후 가짜 "NEW RUN INGESTED" 토스트+리로드
+   → run_id 추적으로 첫 스냅샷/중복 무시
+8. MED — `selectRegion` 히스토리 fetch 레이스(늦은 응답이 다른 선택 덮어씀)
+   → await 후 선택 일치 검사
+9. MED — `/guide` 실패 시 스파크라인 "LOADING…" 영구 고착
+   → "HISTORY UNAVAILABLE" 표시
+10. MED — 백엔드 다운 시 60초마다 에러 토스트 스팸
+    → 상태 전환 시에만 토스트(다운/복구 각 1회)
+11. LOW — Run/새 run 후 Intel 날짜 목록 캐시 미무효화 → 무효화 추가
+12. LOW — System 뷰 중복 `style` 속성 → 병합
+13. LOW — 전 지역 quiet일 때 보이지 않는 토글이 상태를 바꾸던 문제 → 가드
+14. LOW — 필터 복원 값이 옵션에 없으면 셀렉트가 빈 표시 → ALL로 복귀
+
+### 검증 결과
+- `ruff check .` → All checks passed
+- `pytest` → 58 passed (+회귀 테스트 4건: MCP non-dict/notification/date 검증,
+  limit=0), 기존 log replay 실패 1건 동일
+- 브라우저 확인: LIVE 연결 8초간 가짜 토스트 0건, 스파크라인 정상 렌더링
+- `KAVEN_LOG_DIR` 설정 시 쓰기 경로가 env를 따르는 것 확인
+
+---
+
 ## v0.0.08 — 2026-07-18
 
 ### 핵심: Ops Console 운영 능률(UX efficiency) 리뷰·조정

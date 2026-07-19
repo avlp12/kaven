@@ -60,7 +60,7 @@ def query_events(
 
     matched = [e for e in events if _match(e)]
     matched.sort(key=lambda e: (-e["severity"], e.get("time", "")), reverse=False)
-    limited = matched[: max(1, limit)]
+    limited = matched[: max(0, limit)]
     return {
         "date": f"{date[:4]}-{date[4:6]}-{date[6:8]}",
         "total": len(events),
