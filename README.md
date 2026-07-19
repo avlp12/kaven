@@ -7,7 +7,7 @@ severity(1–5) 이벤트를 생성하는 **지정학 조기경보 시스템**�
 텔레그램 경보, Palantir 스타일 웹 작전 콘솔(Ops Console), 그리고
 AI 에이전트 연동(MCP + REST)을 제공합니다.
 
-현재 버전: **0.0.11** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
+현재 버전: **0.0.12** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
 
 ---
 
@@ -37,6 +37,11 @@ AI 에이전트 연동(MCP + REST)을 제공합니다.
 |---|---|
 | ![Command Palette](docs/images/palette.png) | ![System](docs/images/system.png) |
 | 지역·이벤트·자산·뷰·액션 통합 검색 | 감시구역/피드/키워드 수집 상태 보드 |
+
+| Settings (자산 커스터마이징 + 언어) | COP — English mode |
+|---|---|
+| ![Settings](docs/images/settings.png) | ![COP English](docs/images/cop-en.png) |
+| 추적 자산 편집(추가/삭제/유형/on-off) + 한국어/영어 전환 | 언어 전환 시 지역명·설명·도움말이 영어로 표시 |
 
 **키보드 단축키** — `?` 키로 콘솔 안에서 언제든 확인:
 
@@ -72,7 +77,8 @@ AI 에이전트 연동(MCP + REST)을 제공합니다.
   LLM 호출·발송 자체를 스킵. 텍스트/수치/URL 유사도 기반 이벤트 병합.
 - **텔레그램 경보** — severity 기준 발송, 긴급(5) 별도 헤더.
 - **웹 작전 콘솔** — 다중 패널 인텔리전스 콘솔(위 스크린샷). 실시간 SSE,
-  키보드 중심 운용, 상태 지속성(localStorage).
+  키보드 중심 운용, 상태 지속성(localStorage), **한국어/영어 전환**,
+  **추적 자산 커스터마이징**(Settings 뷰에서 편집 → `config.json` 저장).
 - **AI 에이전트 연동** — 의존성 없는 stdio MCP 서버(도구 8개) + `/agent/*` REST.
   에이전트가 상황 요약·이벤트 쿼리·LLM 브리핑을 도구로 소비 가능.
 - **일일 리포트** — JSONL 로그에서 규칙 기반으로 지역/카테고리/자산 집계 +
@@ -189,6 +195,7 @@ python -m http.server 8080 --directory webapp/frontend
 | **Intel Report** | 일일 브리핑 마크다운 (날짜 선택) |
 | **Asset Impact** | 자산별 7일 severity 히트맵 + 신호 분포 |
 | **System** | 수집 파이프라인/감시구역/피드/키워드 상태 보드 |
+| **Settings** | 언어 전환(한국어/영어) + 추적 자산 편집기(추가/삭제/유형/설명/on-off, `config.json` 저장) |
 
 공통: 좌측 AO 워치리스트(S0 지역은 `+n QUIET` 접기, 자산 클릭 → Feed 필터),
 우측 인스펙터(이벤트 상세·지역 도시에·7일 스파크라인·JSON 복사),
@@ -198,7 +205,7 @@ python -m http.server 8080 --directory webapp/frontend
 
 | 키 | 동작 |
 |---|---|
-| `1`–`5` | 뷰 전환 (COP / Feed / Intel / Assets / System) |
+| `1`–`6` | 뷰 전환 (COP / Feed / Intel / Assets / System / Settings) |
 | `Ctrl+K`, `/` | 커맨드 팔레트 (검색·이동·액션) |
 | `J` / `K` | 다음 / 이전 이벤트 선택 |
 | `F` | Feed 이동 + 텍스트 필터 포커스 |
@@ -207,7 +214,14 @@ python -m http.server 8080 --directory webapp/frontend
 | `Esc` | 선택 해제 / 오버레이 닫기 |
 | `?` | 단축키 도움말 |
 
-뷰·필터·정렬·LIVE 상태는 localStorage에 저장되어 새로고침 후 복원됩니다.
+뷰·필터·정렬·LIVE 상태·언어는 localStorage에 저장되어 새로고침 후 복원됩니다.
+
+### 4.4 언어 (한국어 / English)
+
+- Settings 뷰(단축키 `6`) 또는 커맨드 팔레트의 "Toggle language"로 전환.
+- 전환 시 지역명·지역 설명·도움말·툴팁·설정 라벨이 해당 언어로 표시됩니다
+  (콘솔 크롬의 mono 레이블은 디자인상 양쪽 모두 영문 유지).
+- Intel 리포트는 규칙 기반으로 한국어로 생성됩니다.
 
 ## 5) AI 에이전트 연동
 
@@ -268,8 +282,15 @@ cp src/kaven/config.example.json src/kaven/config.json   # 편집 후 재시작
 ```
 
 지원 섹션: `ais_zones`, `adsb_zones`, `news_feeds`, `news_keywords`,
-`social_keywords`. 각 항목의 `enabled: false`로 수집에서 제외(파일에는 유지),
-특정 섹션만 넣으면 해당 섹션만 치환됩니다. 현재 로드 상태는 `GET /config`으로 확인.
+`social_keywords`, `assets`. 각 항목의 `enabled: false`로 수집/집계에서 제외
+(파일에는 유지), 특정 섹션만 넣으면 해당 섹션만 치환됩니다.
+현재 로드 상태는 `GET /config`으로 확인.
+
+**추적 자산(`assets`)**: 포트폴리오/워치리스트에 표시되는 자산의
+유형·설명·활성 여부를 정의합니다. 콘솔 Settings 뷰에서 편집하면
+`PUT /config/assets`를 통해 이 섹션에 저장됩니다. 목록에 없는 자산이
+이벤트에 등장하면 `type: other`로 계속 표시되고, `enabled: false` 자산은
+집계에서 제외됩니다.
 
 ```json
 {
@@ -309,6 +330,7 @@ FastAPI 문서: `GET /docs` (Swagger UI), `GET /openapi.json`
 | `GET /map/data` | 지도 마커 데이터 |
 | `GET /portfolio` · `/portfolio/{asset}` | 자산 영향 집계 |
 | `GET /config` | 수집 설정 조회 |
+| `PUT /config/assets` | 추적 자산 설정 저장 (Settings 뷰가 사용) |
 
 ## 8) 프로젝트 구조
 

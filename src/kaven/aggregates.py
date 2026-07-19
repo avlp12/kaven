@@ -11,20 +11,29 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from src.kaven.config_loader import get_assets
 from src.kaven.log_store import load_day_events, recent_dates
 from src.kaven.regions import REGION_INFO
 from src.kaven.report_generator import generate_daily_report
 
-ASSET_META: dict[str, dict[str, str]] = {
-    "WTI": {"type": "commodity", "description": "서부 텍사스 원유 (에너지 벤치마크)"},
-    "KOSPI": {"type": "index", "description": "한국 종합주가지수"},
-    "원/달러": {"type": "currency", "description": "USD/KRW 환율"},
-    "삼성전자": {"type": "equity", "description": "반도체·전자 (KRX 005930)"},
-    "SK하이닉스": {"type": "equity", "description": "메모리 반도체 (KRX 000660)"},
-    "TSMC": {"type": "equity", "description": "글로벌 파운드리 1위 (TWSE 2330)"},
-    "현대차": {"type": "equity", "description": "자동차 (KRX 005380)"},
-    "LG에너지솔루션": {"type": "equity", "description": "배터리 (KRX 373220)"},
-}
+
+def asset_meta() -> dict[str, dict[str, Any]]:
+    """
+    설정(config.json `assets` 섹션, 기본값 내장)에서 자산 메타 로드.
+
+    Returns: {자산명: {"type", "description", "enabled"}}
+    """
+    meta: dict[str, dict[str, Any]] = {}
+    for a in get_assets(only_enabled=False):
+        name = a.get("name", "").strip()
+        if not name:
+            continue
+        meta[name] = {
+            "type": a.get("type", "other"),
+            "description": a.get("description", name),
+            "enabled": a.get("enabled", True),
+        }
+    return meta
 
 
 def _display(date_str: str) -> str:
@@ -57,9 +66,11 @@ def guide_overview(log_dir: Path) -> dict[str, Any]:
         regions.append({
             "code": code,
             "name": info["name"],
+            "name_en": info.get("name_en", info["name"]),
             "lat": info["lat"],
             "lng": info["lng"],
             "description": info["description"],
+            "description_en": info.get("description_en", info["description"]),
             "current_severity": region_data.get("max_severity", 0),
             "event_count": region_data.get("event_count", 0),
         })
@@ -81,9 +92,11 @@ def region_detail(log_dir: Path, region: str, days: int = 7) -> dict[str, Any] |
     return {
         "code": region,
         "name": info["name"],
+        "name_en": info.get("name_en", info["name"]),
         "lat": info["lat"],
         "lng": info["lng"],
         "description": info["description"],
+        "description_en": info.get("description_en", info["description"]),
         "current_severity": region_data.get("max_severity", 0),
         "today_events": region_data.get("events", []),
         "history": region_history(log_dir, region, days),
@@ -149,9 +162,12 @@ def portfolio_history(log_dir: Path, days: int = 7) -> list[dict[str, Any]]:
     for asset in asset_daily:
         asset_daily[asset].sort(key=lambda x: x["date"])
 
+    meta_map = asset_meta()
     assets = []
     for asset, info in all_assets.items():
-        meta = ASSET_META.get(asset, {"type": "other", "description": asset})
+        meta = meta_map.get(asset, {"type": "other", "description": asset, "enabled": True})
+        if not meta.get("enabled", True):
+            continue  # 설정에서 비활성화된 자산은 집계에서 제외
         dominant = max(info["signals"].items(), key=lambda x: x[1])[0] if info["signals"] else "watch"
         assets.append({
             "name": asset,

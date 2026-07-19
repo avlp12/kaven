@@ -116,17 +116,22 @@ def build_ops_summary(log_dir: Path, date_str: str | None = None) -> dict[str, A
         regions_out.append({
             "code": code,
             "name": info["name"],
+            "name_en": info.get("name_en", info["name"]),
             "lat": info["lat"],
             "lng": info["lng"],
             "description": info["description"],
+            "description_en": info.get("description_en", info["description"]),
             "severity": max((e.get("severity", 0) for e in evts), default=0),
             "event_count": len(evts),
         })
     regions_out.sort(key=lambda r: (-r["severity"], -r["event_count"]))
 
+    from src.kaven.aggregates import asset_meta  # 순환 import 방지 (지연)
+    meta_map = asset_meta()
     assets_out = [
         {"name": name, "count": stat["count"], "max_severity": stat["max_severity"]}
         for name, stat in asset_stats.items()
+        if meta_map.get(name, {}).get("enabled", True)
     ]
     assets_out.sort(key=lambda a: (-a["max_severity"], -a["count"]))
 

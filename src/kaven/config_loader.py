@@ -95,6 +95,25 @@ DEFAULT_NEWS_KEYWORDS: list[dict[str, Any]] = [
     {"id": "semi_sanctions_ko",    "query": "반도체 제재",               "enabled": True},
 ]
 
+DEFAULT_ASSETS: list[dict[str, Any]] = [
+    {"id": "wti",     "name": "WTI",          "type": "commodity", "enabled": True,
+     "description": "서부 텍사스 원유 (에너지 벤치마크)"},
+    {"id": "kospi",   "name": "KOSPI",        "type": "index",     "enabled": True,
+     "description": "한국 종합주가지수"},
+    {"id": "usdkrw",  "name": "원/달러",       "type": "currency",  "enabled": True,
+     "description": "USD/KRW 환율"},
+    {"id": "samsung", "name": "삼성전자",      "type": "equity",    "enabled": True,
+     "description": "반도체·전자 (KRX 005930)"},
+    {"id": "skhynix", "name": "SK하이닉스",    "type": "equity",    "enabled": True,
+     "description": "메모리 반도체 (KRX 000660)"},
+    {"id": "tsmc",    "name": "TSMC",         "type": "equity",    "enabled": True,
+     "description": "글로벌 파운드리 1위 (TWSE 2330)"},
+    {"id": "hyundai", "name": "현대차",        "type": "equity",    "enabled": True,
+     "description": "자동차 (KRX 005380)"},
+    {"id": "lges",    "name": "LG에너지솔루션", "type": "equity",    "enabled": True,
+     "description": "배터리 (KRX 373220)"},
+]
+
 DEFAULT_SOCIAL_KEYWORDS: list[dict[str, Any]] = [
     {"id": "iran_hormuz",           "query": "Iran Hormuz",           "enabled": True},
     {"id": "taiwan_strait_mil_soc", "query": "Taiwan Strait military", "enabled": True},
@@ -149,7 +168,32 @@ def load_config() -> dict[str, Any]:
         "news_feeds":      overrides.get("news_feeds",      DEFAULT_NEWS_FEEDS),
         "news_keywords":   overrides.get("news_keywords",   DEFAULT_NEWS_KEYWORDS),
         "social_keywords": overrides.get("social_keywords", DEFAULT_SOCIAL_KEYWORDS),
+        "assets":          overrides.get("assets",          DEFAULT_ASSETS),
     }
+
+
+def update_config_section(key: str, items: list[dict[str, Any]]) -> Path:
+    """
+    설정 파일의 특정 섹션만 갱신 저장 (다른 섹션의 override는 보존).
+
+    파일이 없으면 해당 섹션만 담은 새 파일을 생성한다.
+    Returns: 저장된 설정 파일 경로.
+    """
+    path = _resolve_config_path()
+    overrides: dict[str, Any] = {}
+    if path.exists():
+        try:
+            overrides = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            logger.warning(f"config 파일 파싱 실패 ({path}): {e} — 섹션만 담아 재작성")
+            overrides = {}
+    overrides[key] = items
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(overrides, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    logger.info(f"Kaven config 섹션 저장: {key} ({len(items)} items) -> {path}")
+    return path
 
 
 def enabled_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -180,3 +224,8 @@ def get_news_keywords(only_enabled: bool = True) -> list[dict[str, Any]]:
 def get_social_keywords(only_enabled: bool = True) -> list[dict[str, Any]]:
     keywords = load_config()["social_keywords"]
     return enabled_items(keywords) if only_enabled else keywords
+
+
+def get_assets(only_enabled: bool = True) -> list[dict[str, Any]]:
+    assets = load_config()["assets"]
+    return enabled_items(assets) if only_enabled else assets
