@@ -369,6 +369,15 @@
     .cfg-del { cursor: pointer; color: var(--dim); text-align: center; }
     .cfg-del:hover { color: var(--red); }
     #langBtns .btn.active { background: #1a2c4a; border-color: var(--blue-deep); color: #a8c7f5; }
+    .prefs-grid {
+      display: grid; grid-template-columns: 240px 1fr; gap: 10px 16px;
+      padding: 14px; align-items: center; max-width: 640px;
+    }
+    .prefs-grid label { font-size: 12px; color: var(--muted); }
+    .prefs-grid input[type=checkbox] { justify-self: start; }
+    .cfg-head-toggle { cursor: pointer; user-select: none; }
+    .cfg-head-toggle:hover { color: var(--text); }
+    .cfg-num { max-width: 90px; }
 
     /* ═══ Toast ═══ */
     #toasts { position: fixed; bottom: 18px; right: 18px; z-index: 950; display: flex; flex-direction: column; gap: 8px; }
@@ -547,29 +556,40 @@
           </div>
 
           <div class="sys-sec">
-            <div class="hd"><span id="assetsCfgTitle">Tracked Assets</span><span id="assetsCfgCount"></span></div>
-            <div class="offline-note" id="assetsCfgNote" style="padding:10px 12px 0"></div>
-            <table class="grid-table"><thead><tr>
-              <th style="width:46px" id="thEnabled">On</th>
-              <th style="width:180px" id="thName">Name</th>
-              <th style="width:130px" id="thType">Type</th>
-              <th id="thDesc">Description</th>
-              <th style="width:40px"></th>
-            </tr></thead><tbody id="assetsCfgBody"></tbody></table>
-            <div style="padding:10px 12px;display:flex;gap:8px;align-items:center">
-              <button class="btn" id="assetAddBtn">+ Add asset</button>
-              <button class="btn primary" id="assetSaveBtn">Save changes</button>
-              <span class="count" id="assetSaveNote"></span>
+            <div class="hd"><span>Console Preferences</span></div>
+            <div class="prefs-grid" id="prefsGrid">
+              <label id="lbView"></label>
+              <select class="cfg-select" id="prefView">
+                <option value="last"></option>
+                <option value="cop">COP</option><option value="feed">Event Feed</option>
+                <option value="intel">Intel Report</option><option value="assets">Asset Impact</option>
+                <option value="system">System</option>
+              </select>
+              <label id="lbRefresh"></label>
+              <select class="cfg-select" id="prefRefresh">
+                <option value="30">30s</option><option value="60">60s</option>
+                <option value="120">2m</option><option value="300">5m</option>
+                <option value="0"></option>
+              </select>
+              <label id="lbMinSev"></label>
+              <select class="cfg-select" id="prefMinSev">
+                <option value="0">ALL</option><option value="2">S2+</option>
+                <option value="3">S3+</option><option value="4">S4+</option><option value="5">S5</option>
+              </select>
+              <label id="lbZones"></label>
+              <input type="checkbox" id="prefZones" />
+              <label id="lbPulse"></label>
+              <input type="checkbox" id="prefPulse" />
+              <label id="lbApi"></label>
+              <div style="display:flex;gap:8px">
+                <input class="cfg-input mono" id="prefApi" placeholder="http://127.0.0.1:8000" style="font-size:11px" />
+                <button class="btn" id="prefApiApply">Apply</button>
+              </div>
             </div>
+            <div class="offline-note" id="prefsNote" style="padding:0 14px 12px"></div>
           </div>
 
-          <div class="sys-sec">
-            <div class="hd"><span>API</span></div>
-            <div class="mono" style="padding:10px 12px;font-size:11px">
-              <span style="color:var(--dim)">ENDPOINT</span> <span id="apiInfo"></span>
-              <div style="color:var(--dim);margin-top:6px;font-size:10px" id="apiNote"></div>
-            </div>
-          </div>
+          <div id="cfgSections"></div>
 
         </div></div>
       </section>
@@ -617,7 +637,9 @@
 'use strict';
 
 /* ═══════════ constants ═══════════ */
-const API = new URLSearchParams(location.search).get('api') || 'http://127.0.0.1:8000';
+const API = new URLSearchParams(location.search).get('api')
+  || (() => { try { return JSON.parse(localStorage.getItem('kaven_ui'))?.prefs?.apiBase || ''; } catch (_) { return ''; } })()
+  || 'http://127.0.0.1:8000';
 const SEV = {
   0: { c: '#5f6b7c', bg: '#383e47', label: 'NOMINAL' },
   1: { c: '#8a95a3', bg: '#383e47', label: 'LOW' },
@@ -654,14 +676,20 @@ const I18N = {
     tt_asset_row: '클릭: Feed에서 이 자산 이벤트 필터',
     tt_nonhttp: '비HTTP 스킴 — 링크 비활성',
     lang_note: 'Intel 리포트는 규칙 기반으로 한국어로 생성됩니다.',
-    assets_note: '포트폴리오/워치리스트의 자산 메타를 관리합니다. 목록에 없는 자산이 이벤트에 등장하면 type=other로 표시되고, 체크 해제된 자산은 집계에서 제외됩니다. 저장 시 config.json에 기록됩니다.',
-    saved_ok: '자산 설정 저장 완료',
+    saved_ok: '저장 완료',
     save_fail: '저장 실패',
-    api_note: '?api=http://호스트:8000 쿼리로 override 가능',
-    add_asset: '+ 자산 추가',
+    add_row: '+ 행 추가',
     save_changes: '변경사항 저장',
-    assets_title: '추적 자산 (Tracked Assets)',
-    col_on: 'On', col_name: '이름', col_type: '유형', col_desc: '설명',
+    prefs_note: '환경설정은 이 브라우저(localStorage)에만 저장됩니다. API 변경은 적용 시 새로고침됩니다.',
+    cfg_note: '아래 섹션은 서버 config.json에 저장되어 수집기·집계·콘솔에 반영됩니다. 빈 행은 저장 시 무시되고, 체크 해제 항목은 수집/표시에서 제외됩니다.',
+    pref_view: '시작 화면',
+    pref_view_last: '마지막 사용 화면',
+    pref_refresh: '자동 새로고침 주기 (LIVE 꺼짐일 때)',
+    pref_refresh_off: '끄기',
+    pref_minsev: '지도·타임라인 최소 severity',
+    pref_zones: '지도에 감시구역 오버레이 표시',
+    pref_pulse: '고심각도(S4+) 펄스 애니메이션',
+    pref_api: 'API 엔드포인트',
   },
   en: {
     help: [
@@ -684,14 +712,20 @@ const I18N = {
     tt_asset_row: 'Click: filter feed by this asset',
     tt_nonhttp: 'Non-HTTP scheme — link disabled',
     lang_note: 'Intel reports are rule-generated in Korean.',
-    assets_note: 'Manage asset metadata for the portfolio/watchlist. Assets not listed here still appear as type=other when mentioned in events; unchecked assets are excluded from aggregation. Saved to config.json.',
-    saved_ok: 'Asset settings saved',
+    saved_ok: 'Saved',
     save_fail: 'Save failed',
-    api_note: 'Override with ?api=http://host:8000',
-    add_asset: '+ Add asset',
+    add_row: '+ Add row',
     save_changes: 'Save changes',
-    assets_title: 'Tracked Assets',
-    col_on: 'On', col_name: 'Name', col_type: 'Type', col_desc: 'Description',
+    prefs_note: 'Preferences are stored in this browser (localStorage) only. Changing the API endpoint reloads the page.',
+    cfg_note: 'Sections below are saved to the server config.json and applied to collectors, aggregation and the console. Blank rows are ignored on save; unchecked items are excluded from collection/display.',
+    pref_view: 'Start view',
+    pref_view_last: 'Last used view',
+    pref_refresh: 'Auto-refresh interval (when LIVE is off)',
+    pref_refresh_off: 'Off',
+    pref_minsev: 'Map/timeline minimum severity',
+    pref_zones: 'Show watchzone overlays on map',
+    pref_pulse: 'High-severity (S4+) pulse animation',
+    pref_api: 'API endpoint',
   },
 };
 const t = (key) => (I18N[state.lang] || I18N.ko)[key] || I18N.ko[key] || key;
@@ -716,6 +750,10 @@ const state = {
   pendingFilters: null,                 // localStorage에서 복원 대기 중인 필터
   lastRunId: null,                      // SSE 재연결 시 중복 run_update 무시용
   opsDown: false,                       // 백엔드 다운 상태 (토스트 중복 방지)
+  prefs: {                              // 콘솔 환경설정 (Settings 뷰, localStorage)
+    defaultView: 'last', refreshSec: 60, minSev: 0,
+    showZones: true, pulse: true, apiBase: '',
+  },
 };
 
 /* ═══════════ persistence (localStorage) ═══════════ */
@@ -843,8 +881,8 @@ function renderMap() {
   mapLayers.zones.clearLayers();
   mapLayers.markers.clearLayers();
 
-  // watchzone rectangles
-  (ops.watchzones || []).forEach((z) => {
+  // watchzone rectangles (환경설정으로 숨김 가능)
+  (state.prefs.showZones !== false ? (ops.watchzones || []) : []).forEach((z) => {
     if (z.lat_min == null) return;
     const color = z.kind === 'ais' ? '#32a467' : '#3fc6da';
     L.rectangle([[z.lat_min, z.lon_min], [z.lat_max, z.lon_max]], {
@@ -856,12 +894,14 @@ function renderMap() {
     ).addTo(mapLayers.zones);
   });
 
-  // region markers
+  // region markers (minSev 환경설정 필터 적용)
+  const minSev = state.prefs.minSev || 0;
   (ops.regions || []).forEach((r) => {
     if (r.code === 'global') return;
+    if (minSev && r.severity < minSev) return;
     const s = sevOf(r.severity);
     const active = r.event_count > 0;
-    if (r.severity >= 4) {
+    if (r.severity >= 4 && state.prefs.pulse !== false) {
       const icon = L.divIcon({
         className: '', iconSize: [16, 16],
         html: `<div class="pulse-marker" style="width:16px;height:16px;color:${s.c}"><span class="ring"></span></div>`,
@@ -914,7 +954,7 @@ function renderSvgMap(ops) {
   for (let lng = -150; lng <= 150; lng += 30) g += `<line x1="${X(lng)}" y1="0" x2="${X(lng)}" y2="500" stroke="#1c232c"/>`;
   for (let lat = -60; lat <= 60; lat += 30) g += `<line x1="0" y1="${Y(lat)}" x2="1000" y2="${Y(lat)}" stroke="#1c232c"/>`;
   let z = '';
-  (ops.watchzones || []).forEach((w) => {
+  (state.prefs.showZones !== false ? (ops.watchzones || []) : []).forEach((w) => {
     if (w.lat_min == null) return;
     const color = w.kind === 'ais' ? '#32a467' : '#3fc6da';
     z += `<rect x="${X(w.lon_min)}" y="${Y(w.lat_max)}" width="${X(w.lon_max) - X(w.lon_min)}" height="${Y(w.lat_min) - Y(w.lat_max)}"
@@ -923,6 +963,7 @@ function renderSvgMap(ops) {
   let mks = '';
   (ops.regions || []).forEach((r) => {
     if (r.code === 'global') return;
+    if ((state.prefs.minSev || 0) && r.severity < state.prefs.minSev) return;
     const s = sevOf(r.severity);
     const rad = r.event_count > 0 ? 4 + r.severity * 1.5 : 2.5;
     mks += `<circle cx="${X(r.lng)}" cy="${Y(r.lat)}" r="${rad}" fill="${s.c}" fill-opacity="0.5" stroke="${s.c}"
@@ -946,6 +987,7 @@ function renderTimeline() {
     html += `<div class="tl-tick" style="left:${h / 24 * 100}%"><span>${String(h).padStart(2, '0')}</span></div>`;
   }
   ops.events.forEach((e) => {
+    if ((state.prefs.minSev || 0) > e.severity) return;
     const t = (e.time || '').slice(11, 19);
     if (!t) return;
     const [hh, mm] = t.split(':').map(Number);
@@ -1372,47 +1414,165 @@ async function loadSystem() {
 
 /* ═══════════ settings view ═══════════ */
 const ASSET_TYPES = ['commodity', 'index', 'currency', 'equity', 'bond', 'crypto', 'other'];
-let assetsCfg = [];  // 편집 중인 작업 사본
+
+/* 서버 config.json 편집 가능 섹션 — 스키마 기반 범용 편집기 */
+const CFG_SECTIONS = [
+  { key: 'assets', title: 'TRACKED ASSETS', cols: [
+    { f: 'enabled', type: 'check' },
+    { f: 'name', type: 'text', w: 150 },
+    { f: 'type', type: 'select', opts: ASSET_TYPES, w: 115 },
+    { f: 'description', type: 'text' },
+  ] },
+  { key: 'regions', title: 'WATCH REGIONS (AO)', cols: [
+    { f: 'enabled', type: 'check' },
+    { f: 'code', type: 'text', w: 90, mono: true },
+    { f: 'name', type: 'text', w: 110 },
+    { f: 'name_en', type: 'text', w: 130 },
+    { f: 'lat', type: 'num' },
+    { f: 'lng', type: 'num' },
+    { f: 'description', type: 'text' },
+  ] },
+  { key: 'ais_zones', title: 'AIS WATCHZONES (MARITIME)', cols: [
+    { f: 'enabled', type: 'check' },
+    { f: 'name', type: 'text', w: 150 },
+    { f: 'lat_min', type: 'num' }, { f: 'lat_max', type: 'num' },
+    { f: 'lon_min', type: 'num' }, { f: 'lon_max', type: 'num' },
+    { f: 'baseline_ships', type: 'num' },
+  ] },
+  { key: 'adsb_zones', title: 'ADS-B WATCHZONES (AIR)', cols: [
+    { f: 'enabled', type: 'check' },
+    { f: 'name', type: 'text', w: 170 },
+    { f: 'lat_min', type: 'num' }, { f: 'lat_max', type: 'num' },
+    { f: 'lon_min', type: 'num' }, { f: 'lon_max', type: 'num' },
+  ] },
+  { key: 'news_feeds', title: 'NEWS FEEDS', cols: [
+    { f: 'enabled', type: 'check' },
+    { f: 'name', type: 'text', w: 160 },
+    { f: 'url', type: 'text', mono: true },
+  ] },
+  { key: 'news_keywords', title: 'NEWS KEYWORDS', cols: [
+    { f: 'enabled', type: 'check' },
+    { f: 'query', type: 'text' },
+  ] },
+  { key: 'social_keywords', title: 'SOCIAL KEYWORDS', cols: [
+    { f: 'enabled', type: 'check' },
+    { f: 'query', type: 'text' },
+  ] },
+];
+let cfgData = {};                 // key -> 편집 중인 작업 사본
+const cfgOpen = { assets: true }; // 섹션 접힘 상태 (assets만 기본 펼침)
 
 function renderSettingsChrome() {
   $('langNote').textContent = t('lang_note');
-  $('assetsCfgNote').textContent = t('assets_note');
-  $('assetsCfgTitle').textContent = t('assets_title');
-  $('thEnabled').textContent = t('col_on');
-  $('thName').textContent = t('col_name');
-  $('thType').textContent = t('col_type');
-  $('thDesc').textContent = t('col_desc');
-  $('assetAddBtn').textContent = t('add_asset');
-  $('assetSaveBtn').textContent = t('save_changes');
-  $('apiInfo').textContent = API;
-  $('apiNote').textContent = t('api_note');
+  $('prefsNote').textContent = t('prefs_note');
+  $('lbView').textContent = t('pref_view');
+  $('lbRefresh').textContent = t('pref_refresh');
+  $('lbMinSev').textContent = t('pref_minsev');
+  $('lbZones').textContent = t('pref_zones');
+  $('lbPulse').textContent = t('pref_pulse');
+  $('lbApi').textContent = t('pref_api');
+  $('prefView').querySelector('option[value="last"]').textContent = t('pref_view_last');
+  $('prefRefresh').querySelector('option[value="0"]').textContent = t('pref_refresh_off');
+  $('prefView').value = state.prefs.defaultView || 'last';
+  $('prefRefresh').value = String(state.prefs.refreshSec ?? 60);
+  $('prefMinSev').value = String(state.prefs.minSev || 0);
+  $('prefZones').checked = state.prefs.showZones !== false;
+  $('prefPulse').checked = state.prefs.pulse !== false;
+  $('prefApi').value = state.prefs.apiBase || '';
   $('langBtns').querySelectorAll('.btn[data-lang]').forEach((b) =>
     b.classList.toggle('active', b.dataset.lang === state.lang));
 }
 
-function renderAssetsCfg() {
-  $('assetsCfgCount').textContent = `${assetsCfg.filter((a) => a.enabled !== false).length} ACTIVE / ${assetsCfg.length}`;
-  $('assetsCfgBody').innerHTML = assetsCfg.map((a, i) => `
-    <tr style="cursor:default">
-      <td><input type="checkbox" data-i="${i}" data-f="enabled" ${a.enabled !== false ? 'checked' : ''}></td>
-      <td><input class="cfg-input" data-i="${i}" data-f="name" value="${esc(a.name || '')}" maxlength="60"></td>
-      <td><select class="cfg-select" data-i="${i}" data-f="type">
-        ${ASSET_TYPES.map((tp) => `<option ${a.type === tp ? 'selected' : ''}>${tp}</option>`).join('')}
-      </select></td>
-      <td><input class="cfg-input" data-i="${i}" data-f="description" value="${esc(a.description || '')}"></td>
-      <td class="cfg-del" data-del="${i}" title="remove">✕</td>
-    </tr>`).join('') ||
-    `<tr><td colspan="5" class="offline-note">NO ASSETS — ${esc(t('add_asset'))}</td></tr>`;
+const colLabel = (f) => f.replace(/_/g, ' ').toUpperCase();
 
-  $('assetsCfgBody').querySelectorAll('[data-f]').forEach((el) =>
-    el.addEventListener('input', () => {
-      const a = assetsCfg[Number(el.dataset.i)];
-      if (!a) return;
-      a[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value;
-      if (el.type === 'checkbox') renderAssetsCfg();
+function renderCfgTable(sec, items) {
+  const head = sec.cols.map((c) =>
+    `<th ${c.w ? `style="width:${c.w}px"` : c.type === 'check' ? 'style="width:36px"'
+      : c.type === 'num' ? 'style="width:78px"' : ''}>${c.type === 'check' ? 'ON' : colLabel(c.f)}</th>`
+  ).join('') + '<th style="width:32px"></th>';
+  const rows = items.map((it, i) => '<tr style="cursor:default">' + sec.cols.map((c) => {
+    if (c.type === 'check') {
+      return `<td><input type="checkbox" data-i="${i}" data-f="enabled" ${it.enabled !== false ? 'checked' : ''}></td>`;
+    }
+    if (c.type === 'select') {
+      return `<td><select class="cfg-select" data-i="${i}" data-f="${c.f}">
+        ${c.opts.map((o) => `<option ${it[c.f] === o ? 'selected' : ''}>${o}</option>`).join('')}</select></td>`;
+    }
+    const v = it[c.f] ?? '';
+    return `<td><input class="cfg-input ${c.mono ? 'mono' : ''} ${c.type === 'num' ? 'cfg-num' : ''}"
+      data-i="${i}" data-f="${c.f}" value="${esc(String(v))}"></td>`;
+  }).join('') + `<td class="cfg-del" data-del="${i}" title="remove">✕</td></tr>`).join('');
+  return `<table class="grid-table"><thead><tr>${head}</tr></thead>
+    <tbody>${rows || `<tr><td colspan="${sec.cols.length + 1}" class="offline-note">EMPTY</td></tr>`}</tbody></table>
+    <div style="padding:10px 12px;display:flex;gap:8px">
+      <button class="btn" data-add="${sec.key}">${esc(t('add_row'))}</button>
+      <button class="btn primary" data-save="${sec.key}">${esc(t('save_changes'))}</button>
+    </div>`;
+}
+
+function renderCfgSections() {
+  $('cfgSections').innerHTML =
+    `<div class="offline-note" style="padding:0 2px 10px">${esc(t('cfg_note'))}</div>` +
+    CFG_SECTIONS.map((sec) => {
+      const items = cfgData[sec.key] || [];
+      const open = !!cfgOpen[sec.key];
+      const en = items.filter((x) => x.enabled !== false).length;
+      return `<div class="sys-sec">
+        <div class="hd cfg-head-toggle" data-toggle="${sec.key}">
+          <span>${open ? '▾' : '▸'} ${sec.title}</span><span>${en} ACTIVE / ${items.length}</span>
+        </div>
+        ${open ? renderCfgTable(sec, items) : ''}
+      </div>`;
+    }).join('');
+
+  const root = $('cfgSections');
+  root.querySelectorAll('[data-toggle]').forEach((el) =>
+    el.addEventListener('click', () => {
+      cfgOpen[el.dataset.toggle] = !cfgOpen[el.dataset.toggle];
+      renderCfgSections();
     }));
-  $('assetsCfgBody').querySelectorAll('[data-del]').forEach((el) =>
-    el.addEventListener('click', () => { assetsCfg.splice(Number(el.dataset.del), 1); renderAssetsCfg(); }));
+  root.querySelectorAll('[data-f]').forEach((el) => {
+    const sec = el.closest('.sys-sec').querySelector('[data-toggle]').dataset.toggle;
+    el.addEventListener('input', () => {
+      const item = cfgData[sec]?.[Number(el.dataset.i)];
+      if (!item) return;
+      item[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value;
+      if (el.type === 'checkbox') renderCfgSections();
+    });
+  });
+  root.querySelectorAll('[data-del]').forEach((el) => {
+    const sec = el.closest('.sys-sec').querySelector('[data-toggle]').dataset.toggle;
+    el.addEventListener('click', () => { cfgData[sec].splice(Number(el.dataset.del), 1); renderCfgSections(); });
+  });
+  root.querySelectorAll('[data-add]').forEach((el) =>
+    el.addEventListener('click', () => {
+      const sec = CFG_SECTIONS.find((s) => s.key === el.dataset.add);
+      const blank = { enabled: true };
+      sec.cols.forEach((c) => { if (c.type !== 'check') blank[c.f] = c.type === 'select' ? c.opts[0] : ''; });
+      (cfgData[sec.key] = cfgData[sec.key] || []).push(blank);
+      renderCfgSections();
+    }));
+  root.querySelectorAll('[data-save]').forEach((el) =>
+    el.addEventListener('click', () => saveSection(el.dataset.save)));
+}
+
+async function saveSection(key) {
+  try {
+    const res = await fetch(`${API}/config/${key}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: cfgData[key] || [] }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast(`${t('save_fail')}: ${err.detail || res.status}`, 'var(--red)');
+      return;
+    }
+    toast(`${key.toUpperCase()} — ${t('saved_ok')}`, 'var(--green)');
+    if (key === 'regions') state.regionHistoryCache = {};
+    await loadSettings();
+    await loadOps(false);  // 워치리스트/지도/집계 즉시 반영
+  } catch (_) { toast(t('save_fail'), 'var(--red)'); }
 }
 
 async function loadSettings() {
@@ -1420,40 +1580,38 @@ async function loadSettings() {
   try {
     const res = await fetch(`${API}/config`);
     const cfg = await res.json();
-    assetsCfg = (cfg.assets?.items || []).map((a) => ({ ...a }));
-    renderAssetsCfg();
+    CFG_SECTIONS.forEach((s) => { cfgData[s.key] = (cfg[s.key]?.items || []).map((x) => ({ ...x })); });
+    renderCfgSections();
   } catch (_) {
-    $('assetsCfgBody').innerHTML = '<tr><td colspan="5" class="offline-note">CONFIG API UNAVAILABLE</td></tr>';
+    $('cfgSections').innerHTML = '<div class="offline-note">CONFIG API UNAVAILABLE</div>';
   }
 }
 
 $('langBtns').querySelectorAll('.btn[data-lang]').forEach((b) =>
   b.addEventListener('click', () => setLang(b.dataset.lang)));
-$('assetAddBtn').addEventListener('click', () => {
-  assetsCfg.push({ name: '', type: 'other', description: '', enabled: true });
-  renderAssetsCfg();
-  $('assetsCfgBody').querySelector(`[data-i="${assetsCfg.length - 1}"][data-f="name"]`)?.focus();
+
+/* ═══════════ console preferences ═══════════ */
+function savePrefs() { persist({ prefs: state.prefs }); }
+function applyPrefs() { startPolling(); renderMap(); renderTimeline(); }
+
+$('prefView').addEventListener('change', () => { state.prefs.defaultView = $('prefView').value; savePrefs(); });
+$('prefRefresh').addEventListener('change', () => { state.prefs.refreshSec = Number($('prefRefresh').value); savePrefs(); applyPrefs(); });
+$('prefMinSev').addEventListener('change', () => { state.prefs.minSev = Number($('prefMinSev').value); savePrefs(); applyPrefs(); });
+$('prefZones').addEventListener('change', () => { state.prefs.showZones = $('prefZones').checked; savePrefs(); applyPrefs(); });
+$('prefPulse').addEventListener('change', () => { state.prefs.pulse = $('prefPulse').checked; savePrefs(); applyPrefs(); });
+$('prefApiApply').addEventListener('click', () => {
+  state.prefs.apiBase = $('prefApi').value.trim();
+  savePrefs();
+  toast('API ENDPOINT SAVED — RELOADING');
+  setTimeout(() => location.reload(), 700);
 });
-$('assetSaveBtn').addEventListener('click', async () => {
-  const items = assetsCfg
-    .map((a) => ({ ...a, name: (a.name || '').trim() }))
-    .filter((a) => a.name);
-  try {
-    const res = await fetch(`${API}/config/assets`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assets: items }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      toast(`${t('save_fail')}: ${err.detail || res.status}`, 'var(--red)');
-      return;
-    }
-    toast(t('saved_ok'), 'var(--green)');
-    await loadSettings();
-    await loadOps(false);  // 워치리스트/집계에 즉시 반영
-  } catch (_) { toast(t('save_fail'), 'var(--red)'); }
-});
+
+let pollTimer = null;
+function startPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  const sec = Number(state.prefs.refreshSec ?? 60);
+  if (sec > 0) pollTimer = setInterval(() => { if (!state.live) loadOps(false); }, sec * 1000);
+}
 
 /* ═══════════ command palette ═══════════ */
 const VIEWS = [
@@ -1543,7 +1701,7 @@ function applyLang() {
   document.querySelectorAll('.grid-table th.sortable').forEach((th) => { th.title = t('tt_sort'); });
   // 데이터 뷰 재렌더 (지역명/설명 언어 반영)
   renderWatchlist(); renderMap(); renderFeed();
-  if ($('settingsView').classList.contains('active')) renderSettingsChrome();
+  if ($('settingsView').classList.contains('active')) { renderSettingsChrome(); renderCfgSections(); }
   if ($('helpOverlay').classList.contains('open')) renderHelp();
   // 인스펙터 재렌더
   if (state.selected?.type === 'event') selectEvent(state.selected.id);
@@ -1673,15 +1831,18 @@ $('liveDot').addEventListener('click', () => {
   const saved = loadPersisted();
   if (saved.sort?.key) state.sort = saved.sort;
   if (saved.lang === 'en' || saved.lang === 'ko') state.lang = saved.lang;
+  if (saved.prefs) state.prefs = { ...state.prefs, ...saved.prefs };
   state.showQuiet = !!saved.showQuiet;
   state.pendingFilters = saved.filters || null;
 
   applyLang();
   initMap();
   loadOps(false);
-  if (saved.view && saved.view !== 'cop') switchView(saved.view);
+  const startView = (state.prefs.defaultView && state.prefs.defaultView !== 'last')
+    ? state.prefs.defaultView : saved.view;
+  if (startView && startView !== 'cop') switchView(startView);
   if (saved.live) $('liveDot').click();
-  setInterval(() => { if (!state.live) loadOps(false); }, 60000);
+  startPolling();
 })();
 </script>
 </body>

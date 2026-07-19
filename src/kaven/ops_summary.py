@@ -13,7 +13,7 @@ from typing import Any
 
 from src.kaven.config_loader import load_config
 from src.kaven.log_store import dedup_events, load_day_events, today_str
-from src.kaven.regions import REGION_INFO
+from src.kaven.regions import REGION_INFO, region_info
 from src.kaven.version import __version__
 
 # 하위호환 alias (v0.0.06까지 webapp.backend.ops.REGION_COORDS)
@@ -26,10 +26,13 @@ def event_id(ev: dict[str, Any]) -> str:
     return hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
 
 
-def enrich_event(ev: dict[str, Any]) -> dict[str, Any]:
-    """원본 이벤트에 안정적 ID + 지역 좌표/이름을 부착한 평탄화 dict."""
+def enrich_event(ev: dict[str, Any], region_map: dict[str, Any] | None = None) -> dict[str, Any]:
+    """원본 이벤트에 안정적 ID + 지역 좌표/이름을 부착한 평탄화 dict.
+
+    region_map: region_info() 결과 재사용용 (미지정 시 내장 기본값 사용).
+    """
     region = ev.get("region", "other")
-    coords = REGION_INFO.get(region, {})
+    coords = (region_map if region_map is not None else REGION_INFO).get(region, {})
     return {
         "id": event_id(ev),
         "event": ev.get("event", ""),
@@ -91,6 +94,7 @@ def build_ops_summary(log_dir: Path, date_str: str | None = None) -> dict[str, A
     all_events = load_day_events(log_dir, date_str)
     unique = dedup_events(all_events)
     run_ids = {ev.get("_run_id") for ev in all_events if ev.get("_run_id")}
+    region_map_all = region_info(include_disabled=True)  # 이벤트 지역명 lookup용
 
     events_out: list[dict[str, Any]] = []
     region_events: dict[str, list[dict[str, Any]]] = {}
@@ -99,7 +103,7 @@ def build_ops_summary(log_dir: Path, date_str: str | None = None) -> dict[str, A
 
     for ev in unique:
         severity = ev.get("severity", 0)
-        events_out.append(enrich_event(ev))
+        events_out.append(enrich_event(ev, region_map_all))
         region_events.setdefault(ev.get("region", "other"), []).append(ev)
         cat = ev.get("category", "other")
         categories[cat] = categories.get(cat, 0) + 1
@@ -111,7 +115,7 @@ def build_ops_summary(log_dir: Path, date_str: str | None = None) -> dict[str, A
     events_out.sort(key=lambda e: e.get("time", ""), reverse=True)
 
     regions_out: list[dict[str, Any]] = []
-    for code, info in REGION_INFO.items():
+    for code, info in region_info().items():
         evts = region_events.get(code, [])
         regions_out.append({
             "code": code,

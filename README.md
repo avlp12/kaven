@@ -7,7 +7,7 @@ severity(1–5) 이벤트를 생성하는 **지정학 조기경보 시스템**�
 텔레그램 경보, Palantir 스타일 웹 작전 콘솔(Ops Console), 그리고
 AI 에이전트 연동(MCP + REST)을 제공합니다.
 
-현재 버전: **0.0.12** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
+현재 버전: **0.0.13** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
 
 ---
 
@@ -38,10 +38,10 @@ AI 에이전트 연동(MCP + REST)을 제공합니다.
 | ![Command Palette](docs/images/palette.png) | ![System](docs/images/system.png) |
 | 지역·이벤트·자산·뷰·액션 통합 검색 | 감시구역/피드/키워드 수집 상태 보드 |
 
-| Settings (자산 커스터마이징 + 언어) | COP — English mode |
+| Settings (전체 커스터마이징) | COP — English mode |
 |---|---|
 | ![Settings](docs/images/settings.png) | ![COP English](docs/images/cop-en.png) |
-| 추적 자산 편집(추가/삭제/유형/on-off) + 한국어/영어 전환 | 언어 전환 시 지역명·설명·도움말이 영어로 표시 |
+| 언어·콘솔 환경설정 + 자산/지역/감시구역/피드/키워드 전 섹션 편집 | 언어 전환 시 지역명·설명·도움말이 영어로 표시 |
 
 **키보드 단축키** — `?` 키로 콘솔 안에서 언제든 확인:
 
@@ -195,7 +195,7 @@ python -m http.server 8080 --directory webapp/frontend
 | **Intel Report** | 일일 브리핑 마크다운 (날짜 선택) |
 | **Asset Impact** | 자산별 7일 severity 히트맵 + 신호 분포 |
 | **System** | 수집 파이프라인/감시구역/피드/키워드 상태 보드 |
-| **Settings** | 언어 전환(한국어/영어) + 추적 자산 편집기(추가/삭제/유형/설명/on-off, `config.json` 저장) |
+| **Settings** | 언어 전환 + 콘솔 환경설정(시작 화면·새로고침 주기·지도 최소 severity·오버레이·펄스·API 주소) + 서버 설정 전 섹션 편집기(자산/감시지역/AIS·ADS-B 구역/뉴스 피드/키워드 → `config.json` 저장) |
 
 공통: 좌측 AO 워치리스트(S0 지역은 `+n QUIET` 접기, 자산 클릭 → Feed 필터),
 우측 인스펙터(이벤트 상세·지역 도시에·7일 스파크라인·JSON 복사),
@@ -286,11 +286,20 @@ cp src/kaven/config.example.json src/kaven/config.json   # 편집 후 재시작
 (파일에는 유지), 특정 섹션만 넣으면 해당 섹션만 치환됩니다.
 현재 로드 상태는 `GET /config`으로 확인.
 
-**추적 자산(`assets`)**: 포트폴리오/워치리스트에 표시되는 자산의
-유형·설명·활성 여부를 정의합니다. 콘솔 Settings 뷰에서 편집하면
-`PUT /config/assets`를 통해 이 섹션에 저장됩니다. 목록에 없는 자산이
-이벤트에 등장하면 `type: other`로 계속 표시되고, `enabled: false` 자산은
-집계에서 제외됩니다.
+지원 섹션 전체가 **콘솔 Settings 뷰에서 직접 편집** 가능합니다
+(`PUT /config/{section}`, 섹션별 검증: 좌표 범위, URL 스킴, 유형 화이트리스트,
+중복 금지). 섹션별 의미:
+
+| 섹션 | 반영 지점 |
+|---|---|
+| `assets` | 포트폴리오/워치리스트 자산 메타. 미등록 자산은 `type: other`로 표시, `enabled: false`는 집계 제외 |
+| `regions` | 감시 지역(AO) — 코드/이름(한·영)/좌표/설명. 지도·워치리스트·가이드·에이전트 어휘에 반영. 새 지역 추가 가능 |
+| `ais_zones` / `adsb_zones` | 해상/공역 감시구역 bounding box + 지도 오버레이 |
+| `news_feeds` / `news_keywords` / `social_keywords` | 수집기 소스/검색어 |
+
+> 참고: `regions`에 새 지역을 추가하면 지도/콘솔에는 즉시 반영되지만,
+> 분석기(LLM)가 그 코드를 이벤트에 부여하려면 분석 프롬프트의 지역 어휘에도
+> 등장해야 합니다 (`/agent/manifest`의 vocabulary가 동적으로 갱신됨).
 
 ```json
 {
@@ -330,7 +339,7 @@ FastAPI 문서: `GET /docs` (Swagger UI), `GET /openapi.json`
 | `GET /map/data` | 지도 마커 데이터 |
 | `GET /portfolio` · `/portfolio/{asset}` | 자산 영향 집계 |
 | `GET /config` | 수집 설정 조회 |
-| `PUT /config/assets` | 추적 자산 설정 저장 (Settings 뷰가 사용) |
+| `PUT /config/{section}` | 설정 섹션 저장 — assets/regions/ais_zones/adsb_zones/news_feeds/news_keywords/social_keywords (Settings 뷰가 사용) |
 
 ## 8) 프로젝트 구조
 
