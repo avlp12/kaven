@@ -4,6 +4,42 @@
 
 ---
 
+## v0.0.11 — 2026-07-19
+
+### 핵심: 내장 벡터 월드맵 — COP 지도의 외부 의존성 제거
+
+기존 COP 지도는 CDN(unpkg Leaflet + CARTO 타일)에 의존해 차단/오프라인
+환경에서는 빈 격자(OFFLINE GRID MODE)만 보였다. 이제 지도가 항상 렌더링된다.
+
+1. **로컬 번들** (`webapp/frontend/vendor/`, `data/`)
+   - Leaflet 1.9.4 (js/css) + topojson-client 3.x + Natural Earth 110m
+     국경 TopoJSON(`countries-110m.json`, 108KB) 총 ~277KB를 저장소에 포함
+   - 라이선스 파일 동봉 (Leaflet BSD-2, topojson-client ISC,
+     Natural Earth public domain)
+2. **벡터 다크 월드맵 베이스**
+   - CARTO 타일 레이어 제거 → 전용 pane(z=250)에 국경 GeoJSON 렌더링
+     (마커·감시구역은 overlayPane z=400으로 항상 위)
+   - 다크 팔레트(#161d27 육지 / #2e3a48 국경 / #0a0e14 해양)로 Palantir 룩 유지
+   - `maxBounds`로 세계 범위 고정, 범례에 "BASEMAP · NATURAL EARTH" 표기
+3. **SVG 폴백 개선** (Leaflet 로드 실패라는 극단 케이스용)
+   - 빈 격자 → 동일 TopoJSON으로 국경 윤곽까지 그리는 정적 지도로 개선
+   - 문구를 "STATIC GRID MODE — MAP LIBRARY UNAVAILABLE"로 정정
+4. **기타**
+   - 인라인 SVG 파비콘 추가 (favicon.ico 404 노이즈 제거)
+   - README/webapp README 지도 설명 현행화, COP 스크린샷 2종 갱신
+     (`cop.png` 월드 뷰, `cop-zoom.png` 한반도 AO 줌 신규)
+
+### 운영 영향
+- 프론트엔드가 인터넷 없이 완전 동작 (백엔드 API만 있으면 됨)
+- 정적 서빙 용량 +277KB (최초 1회 로드 후 브라우저 캐시)
+
+### 검증 결과
+- 브라우저 확인: 로컬 Leaflet 로드, 국가 벡터 path 177개 렌더링, 콘솔 에러 0
+  (favicon 404도 제거), 월드 뷰/줌 뷰 스크린샷 캡처
+- `ruff check .` / `pytest` — 백엔드 무변경 (58 passed, 기존 실패 1건 동일)
+
+---
+
 ## v0.0.10 — 2026-07-19
 
 ### 핵심: README 전면 재작성 + 실제 스크린샷 갤러리

@@ -42,11 +42,14 @@ API 주소가 다르면 `http://127.0.0.1:8080/?api=http://다른호스트:8000`
 
 ## Ops Console 구성
 
-- **COP (Common Operating Picture)** — 다크 전술 지도(Leaflet + CARTO dark)
+- **COP (Common Operating Picture)** — 내장 벡터 월드맵
+  - Natural Earth 110m 국경 데이터(`frontend/data/countries-110m.json`) +
+    로컬 번들 Leaflet/topojson-client(`frontend/vendor/`) — CDN·타일 서버 불필요,
+    오프라인 동작
   - AIS/ADS-B 감시구역 bounding box 오버레이
   - 지역별 severity 마커 (severity ≥ 4 펄스 링)
   - 하단 24시간 이벤트 타임라인 스트립 (UTC)
-  - 오프라인/CDN 차단 시 SVG 격자 지도 자동 폴백
+  - Leaflet 로드 실패 시 동일 데이터로 그린 정적 SVG 지도 폴백
 - **좌측 레일** — COP / Event Feed / Intel Report / Asset Impact / System 전환
 - **워치리스트** — AO(감시 지역) severity 정렬 + 영향 자산
 - **인스펙터(우측)** — 이벤트 상세 / 지역 도시에(7일 스파크라인 포함)
