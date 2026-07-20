@@ -7,7 +7,7 @@ severity(1–5) 이벤트를 생성하는 **지정학 조기경보 시스템**�
 텔레그램 경보, Palantir 스타일 웹 작전 콘솔(Ops Console), 그리고
 AI 에이전트 연동(MCP + REST)을 제공합니다.
 
-현재 버전: **0.0.16** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
+현재 버전: **0.0.17** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
 
 ---
 
@@ -75,7 +75,9 @@ AI 에이전트 연동(MCP + REST)을 제공합니다.
 ## 1) 주요 기능
 
 - **4채널 수집** — AIS 선박(호르무즈·말라카 등), ADS-B 항공(중동·대만·한반도),
-  뉴스 RSS(Reuters/AP/BBC + SearxNG), 소셜 검색. 감시구역·피드·키워드는
+  뉴스 RSS(기본 13개 무료·페이월 없는 공개 피드: AP/BBC/Al Jazeera/Guardian/
+  DW/France 24/UN News/CNA/gCaptain/OilPrice/Google News + SearxNG),
+  소셜 검색. 감시구역·피드·키워드는
   전부 설정 파일로 관리하며 항목별 `enabled` 토글 지원.
 - **LLM 분석 + 규칙 폴백** — OpenAI 호환(로컬 LLM 포함) → Gemini → Anthropic
   (API 키 또는 **구독 OAuth**) → **CLI 구독 브리지**(Claude Code/Codex/
