@@ -4,6 +4,33 @@
 
 ---
 
+## v0.0.20 — 2026-07-20
+
+### 핵심: Windows CLI 실행 수정 — OAuth 로그인 '액세스가 거부되었습니다' 해소
+
+1. **원인**: npm 전역 설치는 `codex`(확장자 없는 유닉스 셸 심)와
+   `codex.cmd`(Windows 래퍼)를 함께 만드는데, 실행 파일 탐색이 확장자 없는
+   심을 잡으면 Windows에서 "액세스가 거부되었습니다"로 실패
+2. **수정** (`cli_providers`):
+   - `_resolve_executable()` — Windows에서 실행 가능한 확장자
+     (.com/.exe/.bat/.cmd)를 우선 탐색, .ps1만 있으면 powershell로 위임
+   - `_exec_argv()` — .cmd/.bat은 `cmd /c`, .ps1은
+     `powershell -ExecutionPolicy Bypass -File`로 래핑
+   - `_split_command()` — Windows에서 백슬래시 경로 보존(posix=False 분해)
+   - 적용 지점: 로그인 터미널 실행·헤드리스 실행·**분석용 run_cli**·
+     설치 여부 감지(provider_status/available_providers) 전부 —
+     Windows에서 CLI 브리지 분석 호출도 함께 고쳐짐
+3. **테스트**: +1건 (win32 시뮬레이션 — .cmd 우선 해석, cmd/c·powershell
+   래핑, 따옴표 경로 분해, 터미널 스폰 명령 구성)
+
+### 운영 영향
+- Breaking change 없음 — macOS/Linux 동작 변화 없음 (기존 which 해석 유지)
+
+### 검증 결과
+- `ruff check .` → All checks passed / `pytest` → **84 passed, 0 failed**
+
+---
+
 ## v0.0.19 — 2026-07-20
 
 ### 핵심: 테스트 스위트 완전 그린 — 리플레이 통합 테스트 픽스처화

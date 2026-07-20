@@ -139,6 +139,38 @@ def test_login_command_resolution():
     assert login_command_for({"id": "unknown", "command": "somecli -p"}) == "somecli"
 
 
+def test_windows_executable_resolution(monkeypatch):
+    """Windows: 확장자 없는 npm 유닉스 심 대신 .cmd 래퍼를 우선 해석.
+
+    확장자 없는 심이 잡히면 cmd에서 '액세스가 거부되었습니다'로 실패한다.
+    """
+    import sys as _sys
+
+    from src.kaven import cli_providers as cp
+
+    monkeypatch.setattr(_sys, "platform", "win32")
+    table = {
+        "codex.cmd": "C:\\npm\\codex.cmd",
+        "codex": "C:\\npm\\codex",          # 확장자 없는 심 — 선택되면 안 됨
+        "tool": "C:\\bin\\tool.ps1",        # .ps1만 있는 경우 → powershell 위임
+    }
+    monkeypatch.setattr(cp.shutil, "which", lambda n: table.get(n))
+
+    assert cp._resolve_executable("codex") == "C:\\npm\\codex.cmd"
+    assert cp._exec_argv(["codex", "login"]) == ["cmd", "/c", "C:\\npm\\codex.cmd", "login"]
+    assert cp._exec_argv(["tool"])[:4] == ["powershell", "-ExecutionPolicy", "Bypass", "-File"]
+    # posix=False 분해 — 백슬래시 경로/따옴표 보존 처리
+    assert cp._split_command('"C:\\Program Files\\x\\cli.cmd" login') == \
+        ["C:\\Program Files\\x\\cli.cmd", "login"]
+
+    # 터미널 스폰이 해석된 실행 파일로 명령을 구성하는지
+    calls = []
+    monkeypatch.setattr(cp.subprocess, "Popen", lambda argv, **_k: calls.append(argv))
+    assert cp._spawn_in_terminal("codex login") is True
+    assert calls[0][:6] == ["cmd", "/c", "start", "Kaven CLI Login", "cmd", "/k"]
+    assert calls[0][6] == 'cmd /c C:\\npm\\codex.cmd login'
+
+
 def test_launch_login_headless_extracts_url(monkeypatch):
     """터미널 없는 환경 — 백그라운드 실행 + 초기 출력에서 로그인 URL 추출."""
     import stat

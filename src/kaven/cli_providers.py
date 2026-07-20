@@ -41,6 +41,46 @@ DEFAULT_LOGIN_COMMANDS: dict[str, str] = {
     "gemini": "gemini",
 }
 
+_WIN_EXEC_EXTS = (".com", ".exe", ".bat", ".cmd")
+
+
+def _split_command(cmd_str: str) -> list[str]:
+    """명령 문자열 분해 — Windows에서는 백슬래시 경로 보존(posix=False) 후 따옴표 제거."""
+    if sys.platform == "win32":
+        return [t.strip('"') for t in shlex.split(cmd_str, posix=False)]
+    return shlex.split(cmd_str)
+
+
+def _resolve_executable(name: str) -> str | None:
+    """실행 파일 절대경로 해석.
+
+    Windows에서 npm 전역 설치는 확장자 없는 유닉스 셸 심(shim)과 .cmd 래퍼를
+    함께 만드는데, 확장자 없는 심이 잡히면 cmd에서 '액세스가 거부되었습니다'로
+    실패한다 — 실행 가능한 확장자(.com/.exe/.bat/.cmd)를 우선 탐색한다.
+    """
+    if sys.platform != "win32":
+        return shutil.which(name)
+    lower = name.lower()
+    if lower.endswith(_WIN_EXEC_EXTS) or lower.endswith(".ps1"):
+        return shutil.which(name)
+    for ext in _WIN_EXEC_EXTS:
+        found = shutil.which(name + ext)
+        if found:
+            return found
+    return shutil.which(name)  # .ps1 등 — 호출부에서 powershell로 위임
+
+
+def _exec_argv(argv: list[str]) -> list[str]:
+    """실행용 argv 정규화 — Windows에서 .cmd/.bat/.ps1을 직접 스폰 가능하게 래핑."""
+    exe = _resolve_executable(argv[0]) or argv[0]
+    lower = exe.lower()
+    if sys.platform == "win32":
+        if lower.endswith((".cmd", ".bat")):
+            return ["cmd", "/c", exe, *argv[1:]]
+        if lower.endswith(".ps1"):
+            return ["powershell", "-ExecutionPolicy", "Bypass", "-File", exe, *argv[1:]]
+    return [exe, *argv[1:]]
+
 
 def _configured_providers() -> list[dict[str, Any]]:
     from src.kaven.config_loader import load_config  # 지연 import (순환 방지)
@@ -52,12 +92,12 @@ def provider_status() -> list[dict[str, Any]]:
     """설정된 CLI 제공자 각각의 설치 여부 (비밀값 없음, 상태 표시용)."""
     out = []
     for p in _configured_providers():
-        cmd = shlex.split(str(p.get("command", "")))
+        cmd = _split_command(str(p.get("command", "")))
         out.append({
             "id": p.get("id", ""),
             "name": p.get("name", p.get("id", "")),
             "enabled": p.get("enabled", True),
-            "installed": bool(cmd) and shutil.which(cmd[0]) is not None,
+            "installed": bool(cmd) and _resolve_executable(cmd[0]) is not None,
         })
     return out
 
@@ -79,8 +119,8 @@ def available_providers() -> list[dict[str, Any]]:
             continue
         if selector and selector != "auto" and p.get("id") != selector:
             continue
-        cmd = shlex.split(str(p.get("command", "")))
-        if not cmd or shutil.which(cmd[0]) is None:
+        cmd = _split_command(str(p.get("command", "")))
+        if not cmd or _resolve_executable(cmd[0]) is None:
             continue
         providers.append(p)
     return providers
@@ -105,8 +145,11 @@ def _spawn_in_terminal(cmd_str: str) -> bool:
     """
     try:
         if sys.platform == "win32":
-            # start의 첫 따옴표 인자는 창 제목 — /k로 로그인 후에도 창 유지
-            subprocess.Popen(["cmd", "/c", "start", "Kaven CLI Login", "cmd", "/k", cmd_str])
+            # 확장자 없는 npm 심 대신 실제 실행 파일(.cmd/.exe)로 해석해 실행
+            # ('액세스가 거부되었습니다' 방지). start의 첫 따옴표 인자는 창 제목,
+            # /k로 로그인 후에도 창 유지.
+            inner = subprocess.list2cmdline(_exec_argv(_split_command(cmd_str)))
+            subprocess.Popen(["cmd", "/c", "start", "Kaven CLI Login", "cmd", "/k", inner])
             return True
         if sys.platform == "darwin":
             import json as _json
@@ -137,10 +180,10 @@ def launch_login(provider: dict[str, Any]) -> dict[str, Any]:
     Returns: {"mode": "terminal"|"headless", "urls": [...], "output": "..."}
     """
     cmd_str = login_command_for(provider)
-    argv = shlex.split(cmd_str)
+    argv = _split_command(cmd_str)
     if not argv:
         raise ValueError("login command is empty")
-    if shutil.which(argv[0]) is None:
+    if _resolve_executable(argv[0]) is None:
         raise FileNotFoundError(f"{argv[0]} is not installed on the server")
 
     if _spawn_in_terminal(cmd_str):
@@ -148,7 +191,7 @@ def launch_login(provider: dict[str, Any]) -> dict[str, Any]:
 
     # 헤드리스 폴백 — 로그인 프로세스는 계속 실행되도록 두고 초기 출력만 수집
     proc = subprocess.Popen(
-        argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        _exec_argv(argv), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         stdin=subprocess.DEVNULL, text=True, errors="replace",
     )
     lines: list[str] = []
@@ -174,10 +217,10 @@ def launch_login(provider: dict[str, Any]) -> dict[str, Any]:
 async def run_cli(provider: dict[str, Any], prompt: str,
                   timeout: float = CLI_TIMEOUT_SECONDS) -> str | None:
     """제공자 CLI에 프롬프트를 전달하고 stdout 텍스트를 반환 (실패 시 None)."""
-    argv = shlex.split(str(provider.get("command", "")))
+    argv = _split_command(str(provider.get("command", "")))
     if not argv:
         return None
-    argv = [*argv, prompt]
+    argv = [*_exec_argv(argv), prompt]
     pid = provider.get("id", argv[0])
     try:
         proc = await asyncio.create_subprocess_exec(
