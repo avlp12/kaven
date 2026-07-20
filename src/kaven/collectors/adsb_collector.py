@@ -32,17 +32,12 @@ def _watch_airspaces() -> dict[str, dict[str, Any]]:
         }
     return zones
 
-# 군용기 ICAO24 hex 범위 (주요 국가)
-# 참고: https://en.wikipedia.org/wiki/List_of_aircraft_registration_prefixes
+# 군용으로 전용된 것으로 알려진 ICAO24 hex 범위.
+# 국가 전체 할당 대역(A0-A9, 71-72, 73, 78-7A 등)은 민항기도 포함하므로
+# 군용 판별 신호로 사용하지 않는다.
 MILITARY_HEX_PREFIXES = {
-    # 미국 군용 (AE, AF 범위 일부)
-    "us_mil": [("AE", "AF"), ("A0", "A9")],
-    # 한국 군용
-    "kr_mil": [("71", "72")],
-    # 중국 군용
-    "cn_mil": [("78", "7A")],
-    # 이란 군용
-    "ir_mil": [("73", "73")],
+    # 미국 군용 전용 AE 대역
+    "us_mil": [("AE", "AE")],
 }
 
 OPENSKY_API_BASE = "https://opensky-network.org/api"
@@ -173,10 +168,11 @@ async def _collect_zone(
     military_aircraft = []
     for state in states:
         icao24 = (state[0] or "").strip().upper()
-        if _is_military_hex(icao24):
+        callsign = (state[1] or "").strip()
+        if _is_military_aircraft(icao24, callsign):
             military_aircraft.append({
                 "icao24": icao24,
-                "callsign": (state[1] or "").strip(),
+                "callsign": callsign,
                 "origin_country": state[2],
                 "lat": state[6],
                 "lon": state[5],
@@ -217,7 +213,8 @@ async def _collect_zone(
 
 
 def _is_military_hex(icao24: str) -> bool:
-    """ICAO24 hex 코드가 군용기 범위인지 판별."""
+    """ICAO24 hex 코드가 군용 전용 범위인지 판별."""
+    icao24 = icao24.strip().upper()
     if len(icao24) < 2:
         return False
 
@@ -228,8 +225,12 @@ def _is_military_hex(icao24: str) -> bool:
             if range_start <= prefix <= range_end:
                 return True
 
-    # 추가 휴리스틱: 콜사인에 군용 패턴
     return False
+
+
+def _is_military_aircraft(icao24: str, callsign: str) -> bool:
+    """군용 전용 hex 또는 알려진 군용 콜사인 보조 신호로 판별."""
+    return _is_military_hex(icao24) or _is_military_callsign(callsign)
 
 
 def _is_military_callsign(callsign: str) -> bool:

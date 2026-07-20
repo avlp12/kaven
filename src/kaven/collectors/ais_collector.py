@@ -41,13 +41,22 @@ async def collect(timeout_seconds: int = 30) -> list[dict[str, Any]]:
     """
     AIS 데이터를 수집하고 이상 감지 결과를 반환.
 
-    API 키가 없으면 시뮬레이션 데이터 반환.
+    시뮬레이션은 KAVEN_SIMULATION_MODE=true로 명시한 경우에만 사용.
     """
     api_key = os.getenv("AISSTREAM_API_KEY", "").strip()
 
-    if not api_key:
-        logger.warning("AISSTREAM_API_KEY 미설정 — 시뮬레이션 모드로 동작")
+    if os.getenv("KAVEN_SIMULATION_MODE", "").strip().lower() == "true":
+        logger.warning("KAVEN_SIMULATION_MODE=true — AIS 시뮬레이션 모드로 동작")
         return _simulate_data()
+
+    if not api_key:
+        logger.error("AISSTREAM_API_KEY 미설정 — 실시간 AIS 수집 불가")
+        return [{
+            "source": "ais",
+            "status": "unavailable",
+            "error": "missing_credentials",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }]
 
     try:
         return await _collect_live(api_key, timeout_seconds)
@@ -159,6 +168,19 @@ async def _collect_live(api_key: str, timeout_seconds: int) -> list[dict[str, An
     return _analyze_zones(zone_ships, watch_zones)
 
 
+def _deduplicate_ships(ships: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """MMSI별 마지막 PositionReport만 남긴다.
+
+    MMSI가 없는 보고는 선박을 식별할 수 없으므로 집계에서 제외한다.
+    """
+    by_mmsi: dict[str, dict[str, Any]] = {}
+    for ship in ships:
+        mmsi = ship.get("mmsi")
+        if mmsi is not None and str(mmsi).strip() and str(mmsi).strip() != "0":
+            by_mmsi[str(mmsi).strip()] = ship
+    return list(by_mmsi.values())
+
+
 def _analyze_zones(zone_ships: dict[str, list], watch_zones: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     """각 감시 구역의 선박 데이터를 분석하여 이상 감지."""
     results = []
@@ -166,7 +188,8 @@ def _analyze_zones(zone_ships: dict[str, list], watch_zones: dict[str, dict[str,
 
     for zone_key, ships in zone_ships.items():
         zone_name = watch_zones[zone_key]["name"]
-        ship_count = len(ships)
+        unique_ships = _deduplicate_ships(ships)
+        ship_count = len(unique_ships)
         baseline = watch_zones[zone_key].get("baseline_ships", 50)
         ratio = ship_count / baseline if baseline > 0 else 0
 
@@ -177,19 +200,16 @@ def _analyze_zones(zone_ships: dict[str, list], watch_zones: dict[str, dict[str,
             anomaly = "ship_count_surge"
 
         # 속도 0 선박 클러스터링 (정박·대기 이상)
-        stationary = [s for s in ships if s.get("speed", 0) < 0.5]
+        stationary = [s for s in unique_ships if s.get("speed", 0) < 0.5]
         if len(stationary) > ship_count * 0.6 and ship_count > 5:
             anomaly = anomaly or "excessive_stationary"
-
-        # 유니크 선박 MMSI 추출
-        unique_mmsis = set(s.get("mmsi") for s in ships if s.get("mmsi"))
 
         result = {
             "source": "ais",
             "zone": zone_key,
             "zone_name": zone_name,
             "ship_count": ship_count,
-            "unique_ships": len(unique_mmsis),
+            "unique_ships": ship_count,
             "baseline": baseline,
             "ratio": round(ratio, 2),
             "stationary_count": len(stationary),
@@ -211,7 +231,7 @@ def _analyze_zones(zone_ships: dict[str, list], watch_zones: dict[str, dict[str,
 
 
 def _simulate_data() -> list[dict[str, Any]]:
-    """API 키 미설정 시 시뮬레이션 데이터. 활성화된 zone에 대해서만 생성."""
+    """명시적 시뮬레이션 모드용 데이터. 활성화된 zone에 대해서만 생성."""
     now = datetime.now(timezone.utc).isoformat()
     watch_zones = _watch_zones()
     results = []
