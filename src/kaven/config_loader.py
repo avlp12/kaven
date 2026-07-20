@@ -68,12 +68,23 @@ DEFAULT_ADSB_ZONES: list[dict[str, Any]] = [
     },
 ]
 
+# 기본 뉴스 피드 — 전부 페이월 없는 무료 공개 RSS.
+# (Reuters 공식 RSS는 2020년 서비스 종료 — 기본 비활성으로 유지)
 DEFAULT_NEWS_FEEDS: list[dict[str, Any]] = [
-    {"id": "reuters_world",    "name": "Reuters World",     "enabled": True, "url": "https://feeds.reuters.com/Reuters/worldNews"},
+    {"id": "reuters_world",    "name": "Reuters World (RSS 종료)", "enabled": False, "url": "https://feeds.reuters.com/Reuters/worldNews"},
     {"id": "ap_topnews",       "name": "AP Top News",       "enabled": True, "url": "https://rsshub.app/apnews/topics/apf-topnews"},
     {"id": "bbc_world",        "name": "BBC World",         "enabled": True, "url": "http://feeds.bbci.co.uk/news/world/rss.xml"},
     {"id": "bbc_asia",         "name": "BBC Asia",          "enabled": True, "url": "http://feeds.bbci.co.uk/news/world/asia/rss.xml"},
     {"id": "bbc_middle_east",  "name": "BBC Middle East",   "enabled": True, "url": "http://feeds.bbci.co.uk/news/world/middle_east/rss.xml"},
+    {"id": "aljazeera_all",    "name": "Al Jazeera English", "enabled": True, "url": "https://www.aljazeera.com/xml/rss/all.xml"},
+    {"id": "guardian_world",   "name": "Guardian World",    "enabled": True, "url": "https://www.theguardian.com/world/rss"},
+    {"id": "dw_all",           "name": "DW (Deutsche Welle)", "enabled": True, "url": "https://rss.dw.com/rdf/rss-en-all"},
+    {"id": "france24_en",      "name": "France 24",         "enabled": True, "url": "https://www.france24.com/en/rss"},
+    {"id": "un_news",          "name": "UN News",           "enabled": True, "url": "https://news.un.org/feed/subscribe/en/news/all/rss.xml"},
+    {"id": "cna_asia",         "name": "CNA (Channel NewsAsia)", "enabled": True, "url": "https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml"},
+    {"id": "gcaptain",         "name": "gCaptain (해운·해사)", "enabled": True, "url": "https://gcaptain.com/feed/"},
+    {"id": "oilprice",         "name": "OilPrice (에너지)",   "enabled": True, "url": "https://oilprice.com/rss/main"},
+    {"id": "gnews_top",        "name": "Google News Top Stories", "enabled": True, "url": "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en"},
 ]
 
 DEFAULT_NEWS_KEYWORDS: list[dict[str, Any]] = [

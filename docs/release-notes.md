@@ -4,6 +4,34 @@
 
 ---
 
+## v0.0.17 — 2026-07-20
+
+### 핵심: 기본 뉴스 피드 확장 — 무료·페이월 없는 공개 소스 9종 추가
+
+1. **기본 뉴스 피드 9종 추가** (전부 무료·페이월 없음, RSS 공개)
+   - Al Jazeera English, Guardian World, DW(Deutsche Welle), France 24,
+     UN News, CNA(Channel NewsAsia), gCaptain(해운·해사),
+     OilPrice(에너지), Google News Top Stories
+   - 해운(gCaptain)·에너지(OilPrice)는 AIS/호르무즈·WTI 감시 축과 직접 연관
+2. **죽은 피드 정리**: Reuters 공식 RSS(feeds.reuters.com)는 2020년 서비스
+   종료 — 기본 `enabled: false`로 전환 (이름에 종료 표기, 행은 보존)
+3. OEC(oec.world) 검토: 뉴스 매체가 아닌 무역 데이터 시각화 플랫폼으로
+   공개 뉴스 RSS가 없어 뉴스 수집기 기본 피드로는 미추가
+   (Settings → 뉴스 피드에서 임의 RSS URL은 언제든 추가 가능)
+
+### 운영 영향
+- Breaking change 없음 — `config.json`에 `news_feeds`를 이미 저장(override)한
+  경우 저장본이 우선하므로 기본값 변경이 자동 적용되지 않음
+  (Settings → 뉴스 피드에서 직접 추가하거나 override 제거)
+- 실패하는 피드는 수집기가 건너뛰므로 일부 피드 장애 시에도 동작 동일
+
+### 검증 결과
+- `ruff check .` → All checks passed / `pytest` → 79 passed (기존 실패 1건 동일)
+- 참고: 원격 실행 환경의 네트워크 정책상 피드 URL 라이브 검증은 불가 —
+  장기 운영 중인 공개 RSS 엔드포인트 기준으로 선정
+
+---
+
 ## v0.0.16 — 2026-07-20
 
 ### 핵심: AO(감시 지역) 사용자 추가 — 발견성 + 분석기 완전 연동
