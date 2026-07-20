@@ -6,7 +6,7 @@ import asyncio
 import json
 from typing import Any, AsyncIterator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from src.kaven.log_store import (
@@ -16,6 +16,7 @@ from src.kaven.log_store import (
     iter_all_runs,
     today_str,
 )
+from webapp.backend.security import require_admin
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -72,7 +73,7 @@ def list_runs(
 
 
 @router.post("/once")
-async def trigger_run_once() -> dict[str, Any]:
+async def trigger_run_once(_admin: None = Depends(require_admin)) -> dict[str, Any]:
     from src.kaven.kaven import run_once  # heavy import는 호출 시점에
 
     return await run_once()

@@ -7,17 +7,19 @@ import re
 import shlex
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from src.kaven.anthropic_auth import auth_mode as anthropic_auth_mode
 from src.kaven.cli_providers import provider_status
 from src.kaven.config_loader import load_config, update_config_section
 from src.kaven.version import __version__
+from webapp.backend.security import require_admin
 
 router = APIRouter(tags=["system"])
 
 ASSET_TYPES = {"commodity", "index", "currency", "equity", "bond", "crypto", "other"}
+DEFAULT_ALLOWED_CLI_COMMANDS = {"claude", "codex", "cursor-agent", "gemini", "ant"}
 
 
 @router.get("/health")
@@ -125,6 +127,13 @@ def _validate_cli_provider(item: dict) -> dict[str, Any]:
         raise _bad(f"invalid command: {e}") from None
     if not argv:
         raise _bad("command is required")
+    allowed = DEFAULT_ALLOWED_CLI_COMMANDS | {
+        command.strip()
+        for command in os.getenv("KAVEN_ALLOWED_CLI_COMMANDS", "").split(",")
+        if command.strip()
+    }
+    if argv[0] not in allowed:
+        raise _bad(f"command executable must be allowed — allowed: {sorted(allowed)}")
     out.update(id=item.get("id") or _slug(argv[0]), command=command)
     return out
 
@@ -170,7 +179,11 @@ EDITABLE_SECTIONS: dict[str, tuple[Any, str]] = {
 
 
 @router.put("/config/{section}")
-def save_config_section(section: str, payload: SectionPayload) -> dict[str, Any]:
+def save_config_section(
+    section: str,
+    payload: SectionPayload,
+    _admin: None = Depends(require_admin),
+) -> dict[str, Any]:
     """
     설정 섹션 저장 — config.json의 해당 섹션만 갱신 (다른 섹션 보존).
 

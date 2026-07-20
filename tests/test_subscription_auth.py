@@ -164,6 +164,7 @@ def test_health_reports_analysis_status(monkeypatch):
 def test_put_cli_providers_validates_and_persists(monkeypatch):
     cfg = _tmp() / "config.json"
     monkeypatch.setenv("KAVEN_CONFIG", str(cfg))
+    monkeypatch.setenv("KAVEN_ALLOWED_CLI_COMMANDS", "mycli")
     client = _client()
 
     res = client.put("/config/cli_providers", json={"items": [
