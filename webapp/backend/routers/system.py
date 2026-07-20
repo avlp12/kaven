@@ -12,7 +12,13 @@ from pydantic import BaseModel, Field
 
 from src.kaven.anthropic_auth import auth_mode as anthropic_auth_mode
 from src.kaven.cli_providers import provider_status
-from src.kaven.config_loader import load_config, update_config_section
+from src.kaven.config_loader import (
+    CREDENTIAL_KEYS,
+    get_credentials,
+    load_config,
+    update_config_section,
+    update_credentials,
+)
 from src.kaven.version import __version__
 
 router = APIRouter(tags=["system"])
@@ -22,16 +28,23 @@ ASSET_TYPES = {"commodity", "index", "currency", "equity", "bond", "crypto", "ot
 
 @router.get("/health")
 def health() -> dict[str, Any]:
+    stored = get_credentials()
+
+    def _set(env_var: str, cred_key: str) -> bool:
+        return bool(os.getenv(env_var, "").strip() or stored.get(cred_key))
+
     return {
         "status": "ok",
         "service": "kaven-web-api",
         "version": __version__,
-        # 분석 경로별 자격증명 상태 (비밀값 미노출)
+        # 분석 경로별 자격증명 상태 (비밀값 미노출 — boolean/모드 문자열만)
         "analysis": {
-            "openai_compatible": bool(os.getenv("OPENAI_BASE_URL", "").strip()),
-            "gemini": bool(os.getenv("GEMINI_API_KEY", "").strip()),
+            "openai_compatible": _set("OPENAI_BASE_URL", "openai_base_url"),
+            "gemini": _set("GEMINI_API_KEY", "gemini_api_key"),
             "anthropic": anthropic_auth_mode(),  # api_key | oauth | none
-            "anthropic_base_url": bool(os.getenv("ANTHROPIC_BASE_URL", "").strip()),
+            "anthropic_base_url": _set("ANTHROPIC_BASE_URL", "anthropic_base_url"),
+            # Settings UI에서 저장된 항목 여부 (placeholder 표시용, 값 미노출)
+            "stored": {k: bool(stored.get(k)) for k in CREDENTIAL_KEYS},
             "cli_providers": provider_status(),
         },
     }
@@ -167,6 +180,30 @@ EDITABLE_SECTIONS: dict[str, tuple[Any, str]] = {
     "social_keywords": (_validate_keyword, "query"),
     "cli_providers": (_validate_cli_provider, "name"),
 }
+
+
+@router.put("/config/credentials")
+def save_credentials(payload: dict[str, str]) -> dict[str, Any]:
+    """
+    모델 자격증명 저장 (Settings → 모델 공급자).
+
+    body: {키: 값} — 허용 키는 CREDENTIAL_KEYS. 빈 값("")은 해당 키 삭제
+    (연결 해제). config.json "credentials"에 저장되며 환경변수가 우선한다.
+    응답에 비밀값은 포함하지 않는다.
+    """
+    unknown = sorted(set(payload) - set(CREDENTIAL_KEYS))
+    if unknown:
+        raise _bad(f"unknown credential keys: {unknown} — allowed: {sorted(CREDENTIAL_KEYS)}")
+    for key, value in payload.items():
+        value = str(value or "").strip()
+        if len(value) > 4000:
+            raise _bad(f"{key} is too long")
+        if value and key.endswith("_base_url") and not re.match(r"^https?://", value):
+            raise _bad(f"{key} must start with http(s):// — got {value[:40]!r}")
+    update_credentials(payload)
+    saved = [k for k, v in payload.items() if str(v or "").strip()]
+    cleared = [k for k, v in payload.items() if not str(v or "").strip()]
+    return {"saved": saved, "cleared": cleared}
 
 
 @router.put("/config/{section}")

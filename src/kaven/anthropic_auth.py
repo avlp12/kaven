@@ -18,7 +18,6 @@ OAuth 토큰은 ``x-api-key``가 아니라 ``Authorization: Bearer``로 전달�
 from __future__ import annotations
 
 import logging
-import os
 import shutil
 import subprocess
 import time
@@ -65,11 +64,15 @@ def resolve_auth() -> tuple[str, dict[str, str]] | None:
         (mode, headers) — mode는 "api_key" 또는 "oauth".
         사용 가능한 자격증명이 없으면 None.
     """
-    api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    # 환경변수 → Settings UI 저장 자격증명(config.json) → ant CLI 순.
+    from src.kaven.config_loader import env_or_credential  # 지연 import (순환 방지)
+
+    api_key = env_or_credential("ANTHROPIC_API_KEY", "anthropic_api_key")
     if api_key:
         return "api_key", {"x-api-key": api_key}
 
-    token = os.getenv("ANTHROPIC_AUTH_TOKEN", "").strip() or _ant_cli_token()
+    token = env_or_credential("ANTHROPIC_AUTH_TOKEN", "anthropic_auth_token") \
+        or _ant_cli_token()
     if token:
         return "oauth", {
             "authorization": f"Bearer {token}",

@@ -7,7 +7,6 @@ OpenClaw 게이트웨이(localhost:18789) 또는 직접 Anthropic API 호출.
 
 import json
 import logging
-import os
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -16,6 +15,7 @@ import aiohttp
 
 from src.kaven.anthropic_auth import resolve_auth as resolve_anthropic_auth
 from src.kaven.cli_providers import available_providers, run_cli
+from src.kaven.config_loader import env_or_credential
 
 logger = logging.getLogger("kaven.analyzer")
 
@@ -84,10 +84,11 @@ async def analyze(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
 
     # OpenAI 호환 API(로컬 LLM 포함) 우선, Gemini/Anthropic 순으로 폴백.
     # Anthropic은 API 키 외에 구독(OAuth) 자격증명도 지원 (anthropic_auth 참조).
-    openai_base_url = os.getenv("OPENAI_BASE_URL", "").strip().rstrip("/")
-    openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
-    gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
+    # 각 항목은 환경변수 → Settings UI 저장 자격증명(config.json) 순으로 해석.
+    openai_base_url = env_or_credential("OPENAI_BASE_URL", "openai_base_url").rstrip("/")
+    openai_api_key = env_or_credential("OPENAI_API_KEY", "openai_api_key")
+    openai_model = env_or_credential("OPENAI_MODEL", "openai_model") or "gpt-4o-mini"
+    gemini_key = env_or_credential("GEMINI_API_KEY", "gemini_api_key")
     anthropic_auth = resolve_anthropic_auth()
 
     result = None
@@ -364,10 +365,10 @@ async def _call_anthropic_direct(auth_headers: dict[str, str], summary: str) -> 
       엔드포인트로 교체 가능 (기본 https://api.anthropic.com)
     - ANTHROPIC_MODEL: 모델 override (기본 claude-sonnet-5)
     """
-    base_url = os.getenv("ANTHROPIC_BASE_URL", "").strip().rstrip("/") \
+    base_url = env_or_credential("ANTHROPIC_BASE_URL", "anthropic_base_url").rstrip("/") \
         or "https://api.anthropic.com"
     url = f"{base_url}/v1/messages"
-    model = os.getenv("ANTHROPIC_MODEL", "").strip() or "claude-sonnet-5"
+    model = env_or_credential("ANTHROPIC_MODEL", "anthropic_model") or "claude-sonnet-5"
 
     payload = {
         "model": model,

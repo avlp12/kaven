@@ -4,6 +4,41 @@
 
 ---
 
+## v0.0.15 — 2026-07-20
+
+### 핵심: 지도 렌더링 수정 + 설정 UI에서 모델 키·토큰 직접 입력 + 가독성 개선
+
+1. **월드맵 반자오선(경도 180°) 렌더링 수정**
+   - 경도 180°를 가로지르는 폴리곤(러시아·알류샨 열도·피지)이 지도 전폭을
+     가로지르는 수평 밴드로 깨져 보이던 문제 수정
+   - 링 내 연속 점의 경도 점프(>180°)를 ±360° 시프트로 연속화 (`unwrapAntimeridian`)
+2. **모델 자격증명 UI 입력** — Settings → 모델 공급자 카드에서 직접 설정
+   - Anthropic(API 키/OAuth 토큰/Base URL/모델), OpenAI 호환(Base URL/키/모델),
+     Gemini(키)를 카드에서 입력·저장, 연결 해제 버튼으로 삭제
+   - `PUT /config/credentials` 신설 — config.json `credentials` 키에 저장
+     (허용 키 화이트리스트, base URL http(s) 검증, 응답에 비밀값 미포함)
+   - 우선순위: 환경변수 → UI 저장 자격증명. `GET /config` 응답에는 미노출,
+     `/health` `analysis.stored`로 저장 여부만 boolean 노출 (placeholder 표시용)
+   - analyzer/anthropic_auth가 `env_or_credential()`로 통일 해석
+3. **UI 가독성 개선**
+   - 전역 텍스트 대비 상향 (`--muted`/`--dim` 밝기 증가)
+   - 설정 화면 한글 안내문을 mono·자간 스타일에서 산세리프 `note-text`
+     (12.5px, 행간 1.65)로 교체 — 공급자 카드 본문/배지/내비/라벨 크기 확대
+4. **테스트**: +2건 (자격증명 저장·삭제·env 우선순위·resolve_auth 연동,
+   PUT /config/credentials 검증·/health 반영·GET /config 비노출)
+
+### 운영 영향
+- Breaking change 없음 — 환경변수 방식은 종전과 동일하게 우선 적용
+- UI로 저장한 키는 서버 config.json에 평문 저장 (로컬 전용 권장, 문서화)
+
+### 검증 결과
+- `ruff check .` → All checks passed / `pytest` → 78 passed (기존 실패 1건 동일)
+- 브라우저 E2E: 월드 줌 지도 밴드 소멸 확인, Gemini 키 저장→API Key 배지·
+  '저장됨' placeholder·연결 해제 round-trip, 잘못된 base URL 400 토스트,
+  콘솔 에러 0
+
+---
+
 ## v0.0.14 — 2026-07-19
 
 ### 핵심: 구독(OAuth) 모델 연결 + zcode 스타일 설정 UI
