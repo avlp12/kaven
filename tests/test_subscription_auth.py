@@ -128,6 +128,35 @@ def test_run_cli_failures_return_none():
     assert asyncio.run(run_cli({"id": "empty", "command": ""}, "x")) is None
 
 
+def test_login_command_resolution():
+    from src.kaven.cli_providers import login_command_for
+
+    assert login_command_for({"id": "codex", "command": "codex exec"}) == "codex login"
+    assert login_command_for({"id": "claude", "command": "claude -p"}) == "claude"
+    assert login_command_for(
+        {"id": "custom", "command": "mycli -p", "login_command": "mycli auth login"}
+    ) == "mycli auth login"
+    assert login_command_for({"id": "unknown", "command": "somecli -p"}) == "somecli"
+
+
+def test_launch_login_headless_extracts_url(monkeypatch):
+    """터미널 없는 환경 — 백그라운드 실행 + 초기 출력에서 로그인 URL 추출."""
+    import stat
+
+    from src.kaven import cli_providers as cp
+
+    script = _tmp() / "fake-login"
+    script.write_text("#!/bin/sh\necho 'Open https://example.com/device?code=ABC to sign in'\n",
+                      encoding="utf-8")
+    script.chmod(script.stat().st_mode | stat.S_IEXEC)
+    monkeypatch.setattr(cp, "_spawn_in_terminal", lambda _cmd: False)
+
+    result = cp.launch_login({"id": "fake", "command": str(script),
+                              "login_command": str(script)})
+    assert result["mode"] == "headless"
+    assert result["urls"] == ["https://example.com/device?code=ABC"]
+
+
 # ── /health + PUT /config/cli_providers ─────────────────────────
 
 
@@ -218,6 +247,32 @@ def test_put_credentials_endpoint(monkeypatch):
     res = client.put("/config/credentials", json={"gemini_api_key": ""})  # 해제
     assert res.json()["cleared"] == ["gemini_api_key"]
     assert client.get("/health").json()["analysis"]["gemini"] is False
+
+
+def test_cli_login_endpoint(monkeypatch):
+    import stat
+
+    from src.kaven import cli_providers as cp
+
+    script = _tmp() / "fake-cli"
+    script.write_text("#!/bin/sh\necho 'Visit https://login.example.com/start'\n", encoding="utf-8")
+    script.chmod(script.stat().st_mode | stat.S_IEXEC)
+    _write_cli_config(monkeypatch, [
+        {"id": "fake", "name": "Fake", "enabled": True,
+         "command": str(script), "login_command": str(script)},
+        {"id": "ghost", "name": "Ghost", "enabled": True, "command": "no-such-cli-xyz"},
+    ])
+    monkeypatch.setattr(cp, "_spawn_in_terminal", lambda _cmd: False)
+    client = _client()
+
+    res = client.post("/cli/fake/login")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["provider"] == "fake" and body["mode"] == "headless"
+    assert body["urls"] == ["https://login.example.com/start"]
+
+    assert client.post("/cli/nope/login").status_code == 404
+    assert client.post("/cli/ghost/login").status_code == 400  # 미설치
 
 
 def test_put_cli_providers_validates_and_persists(monkeypatch):

@@ -7,7 +7,7 @@ severity(1–5) 이벤트를 생성하는 **지정학 조기경보 시스템**�
 텔레그램 경보, Palantir 스타일 웹 작전 콘솔(Ops Console), 그리고
 AI 에이전트 연동(MCP + REST)을 제공합니다.
 
-현재 버전: **0.0.17** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
+현재 버전: **0.0.18** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
 
 ---
 
@@ -201,7 +201,11 @@ API 키 대신 **이미 쓰고 있는 구독**으로 분석 모델을 연결할 
 
 **CLI 구독 브리지** — 로그인된 공식 CLI에 분석 프롬프트를 위임합니다.
 설치·로그인만 되어 있으면 자동 감지되며, Settings → 모델 공급자에서
-활성/비활성·명령 편집·커스텀 공급자 추가가 가능합니다:
+활성/비활성·명령 편집·커스텀 공급자 추가가 가능합니다.
+설치된 CLI는 카드의 **연결(로그인) 버튼**으로 OAuth 로그인 플로우를 바로
+실행할 수 있습니다 — 백엔드 머신에서 새 터미널 창이 열리거나(데스크톱),
+헤드리스 환경이면 로그인 URL을 추출해 브라우저 새 탭으로 엽니다
+(`POST /cli/{id}/login`, 로그인 명령은 `login_command` 필드로 커스터마이즈):
 
 | 구독 | CLI | 기본 명령 |
 |---|---|---|
@@ -404,6 +408,7 @@ FastAPI 문서: `GET /docs` (Swagger UI), `GET /openapi.json`
 | `GET /config` | 수집 설정 조회 |
 | `PUT /config/{section}` | 설정 섹션 저장 — assets/regions/ais_zones/adsb_zones/news_feeds/news_keywords/social_keywords/cli_providers (Settings 뷰가 사용) |
 | `PUT /config/credentials` | 모델 키·토큰 저장/삭제 (Settings → 모델 공급자 카드. 빈 값 = 연결 해제. `GET /config` 응답에 미노출, 환경변수 우선) |
+| `POST /cli/{id}/login` | CLI 브리지 OAuth 로그인 실행 — 백엔드 머신에서 터미널 창 또는 로그인 URL 추출 (Settings 연결 버튼이 사용) |
 
 ## 8) 프로젝트 구조
 
