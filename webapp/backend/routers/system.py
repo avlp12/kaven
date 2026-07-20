@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from src.kaven.anthropic_auth import auth_mode as anthropic_auth_mode
-from src.kaven.cli_providers import provider_status
+from src.kaven.cli_providers import launch_login, provider_status
 from src.kaven.config_loader import (
     CREDENTIAL_KEYS,
     get_credentials,
@@ -139,6 +139,13 @@ def _validate_cli_provider(item: dict) -> dict[str, Any]:
     if not argv:
         raise _bad("command is required")
     out.update(id=item.get("id") or _slug(argv[0]), command=command)
+    login_command = str(item.get("login_command", "")).strip()
+    if login_command:
+        try:
+            shlex.split(login_command)
+        except ValueError as e:
+            raise _bad(f"invalid login_command: {e}") from None
+        out["login_command"] = login_command
     return out
 
 
@@ -180,6 +187,29 @@ EDITABLE_SECTIONS: dict[str, tuple[Any, str]] = {
     "social_keywords": (_validate_keyword, "query"),
     "cli_providers": (_validate_cli_provider, "name"),
 }
+
+
+@router.post("/cli/{provider_id}/login")
+def cli_login(provider_id: str) -> dict[str, Any]:
+    """
+    CLI 브리지의 OAuth 로그인 플로우 실행 (Settings → 모델 공급자 연결 버튼).
+
+    백엔드가 실행 중인 머신에서 해당 CLI의 로그인 명령을 실행한다:
+    데스크톱이면 새 터미널 창(대화형 완료), 헤드리스면 백그라운드 실행 후
+    초기 출력에서 로그인 URL을 추출해 반환.
+    """
+    providers = {p.get("id"): p for p in load_config().get("cli_providers", [])}
+    provider = providers.get(provider_id)
+    if provider is None:
+        raise HTTPException(status_code=404,
+                            detail=f"unknown cli provider {provider_id!r} — known: {sorted(providers)}")
+    try:
+        result = launch_login(provider)
+    except FileNotFoundError as e:
+        raise _bad(str(e)) from None
+    except ValueError as e:
+        raise _bad(str(e)) from None
+    return {"provider": provider_id, **result}
 
 
 @router.put("/config/credentials")

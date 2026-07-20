@@ -773,9 +773,14 @@ const I18N = {
     prov_anthropic_hint: 'Claude Pro/Max 구독은 `ant` CLI 로그인 또는 ANTHROPIC_AUTH_TOKEN(OAuth)으로, API 키는 ANTHROPIC_API_KEY로 연결됩니다. ANTHROPIC_BASE_URL로 GLM(지푸)·Kimi 등 Anthropic 호환 엔드포인트도 사용 가능합니다.',
     prov_openai_hint: 'OpenAI · Grok(xAI) · GLM · Kimi 등 OpenAI 호환 엔드포인트 (OPENAI_BASE_URL + OPENAI_API_KEY).',
     prov_gemini_hint: 'Google Gemini API (GEMINI_API_KEY).',
-    prov_cli_hint: '프롬프트는 명령의 마지막 인자로 전달됩니다. KAVEN_CLI_PROVIDER 환경변수로 특정 브리지만 사용(id) 또는 전체 비활성(off)할 수 있습니다.',
+    prov_cli_hint: '설치된 CLI는 연결(로그인) 버튼으로 OAuth 로그인 플로우를 바로 실행할 수 있습니다(서버 머신에서 터미널 창 또는 로그인 URL). 프롬프트는 명령의 마지막 인자로 전달되며, KAVEN_CLI_PROVIDER 환경변수로 특정 브리지만 사용(id) 또는 전체 비활성(off)할 수 있습니다.',
     prov_custom_endpoint: '커스텀 엔드포인트',
     prov_unlink: '연결 해제',
+    prov_login: '연결 (로그인)',
+    prov_login_terminal: '터미널 창이 열렸습니다 — 창에서 OAuth 로그인을 완료하세요',
+    prov_login_url: '로그인 URL을 새 탭으로 열었습니다',
+    prov_login_started: '로그인 프로세스를 시작했습니다 — 서버 콘솔 출력을 확인하세요',
+    prov_login_fail: '로그인 실행 실패',
     prov_stored: '저장됨 — 변경하려면 입력',
     prov_direct_note: '카드에 키·토큰을 입력하고 저장하면 서버 config.json에 저장되어 즉시 사용됩니다(로컬 전용 권장 · 값은 다시 표시되지 않음). 동일 항목의 환경변수가 있으면 환경변수가 우선합니다.',
   },
@@ -846,9 +851,14 @@ const I18N = {
     prov_anthropic_hint: 'Claude Pro/Max subscriptions connect via `ant` CLI login or ANTHROPIC_AUTH_TOKEN (OAuth); API keys via ANTHROPIC_API_KEY. ANTHROPIC_BASE_URL also enables Anthropic-compatible endpoints such as GLM (Zhipu) and Kimi.',
     prov_openai_hint: 'OpenAI-compatible endpoints — OpenAI · Grok (xAI) · GLM · Kimi (OPENAI_BASE_URL + OPENAI_API_KEY).',
     prov_gemini_hint: 'Google Gemini API (GEMINI_API_KEY).',
-    prov_cli_hint: 'The prompt is passed as the last argument of the command. Use the KAVEN_CLI_PROVIDER env var to pin one bridge (id) or disable all (off).',
+    prov_cli_hint: 'For installed CLIs, the Connect (login) button launches the OAuth login flow directly (terminal window or login URL on the server machine). The prompt is passed as the last argument of the command; use the KAVEN_CLI_PROVIDER env var to pin one bridge (id) or disable all (off).',
     prov_custom_endpoint: 'Custom endpoint',
     prov_unlink: 'Unlink',
+    prov_login: 'Connect (login)',
+    prov_login_terminal: 'A terminal window opened — complete the OAuth login there',
+    prov_login_url: 'Opened the login URL in a new tab',
+    prov_login_started: 'Login process started — check the server console output',
+    prov_login_fail: 'Login launch failed',
     prov_stored: 'Stored — type to replace',
     prov_direct_note: 'Keys/tokens entered on a card are saved to the server config.json and used immediately (local use recommended · values are never shown again). Environment variables for the same item take precedence.',
   },
@@ -1852,12 +1862,14 @@ function renderProviders() {
     const dot = !en ? GRAY : inst ? 'var(--green)' : inst === false ? 'var(--orange)' : GRAY;
     const badge = !en ? t('prov_disabled') : inst ? t('prov_installed')
       : inst === false ? t('prov_notinstalled') : t('prov_none');
+    const loginBtn = (en && inst && p.id)
+      ? `<button class="btn" data-plogin="${esc(p.id)}" style="font-size:10px">${esc(t('prov_login'))}</button>` : '';
     return provCard({
       dot,
       name: `<input data-pi="${i}" data-pf="name" value="${esc(p.name || '')}" spellcheck="false">`,
       badge,
       badgeCls: en && inst ? 'ok' : en && inst === false ? 'warn' : '',
-      headExtra: `<label class="prov-toggle"><input type="checkbox" data-pi="${i}" data-pf="enabled" ${en ? 'checked' : ''}>${esc(t('prov_enabled_lb'))}</label>
+      headExtra: `${loginBtn}<label class="prov-toggle"><input type="checkbox" data-pi="${i}" data-pf="enabled" ${en ? 'checked' : ''}>${esc(t('prov_enabled_lb'))}</label>
         <span class="prov-unlink" data-punlink="${i}" title="remove">✕</span>`,
       rows: [[t('prov_cmd'),
         `<input class="cfg-input mono" style="font-size:11px" data-pi="${i}" data-pf="command" value="${esc(p.command || '')}" spellcheck="false">`]],
@@ -1887,11 +1899,33 @@ function renderProviders() {
       cfgData.cli_providers.splice(Number(el.dataset.punlink), 1);
       renderProviders();
     }));
+  wrap.querySelectorAll('[data-plogin]').forEach((el) =>
+    el.addEventListener('click', () => cliLogin(el.dataset.plogin, el)));
   $('provAdd')?.addEventListener('click', () => {
     (cfgData.cli_providers = cfgData.cli_providers || []).push({ enabled: true, name: '', command: '' });
     renderProviders();
   });
   $('provSave')?.addEventListener('click', () => saveSection('cli_providers'));
+}
+
+async function cliLogin(pid, btn) {
+  // 백엔드 머신에서 해당 CLI의 OAuth 로그인 플로우 실행 (터미널 창 또는 URL 반환)
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API}/cli/${encodeURIComponent(pid)}/login`, { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast(`${t('prov_login_fail')}: ${d.detail || res.status}`, 'var(--red)');
+    } else if (d.mode === 'terminal') {
+      toast(t('prov_login_terminal'), 'var(--green)');
+    } else if (d.urls && d.urls.length) {
+      window.open(d.urls[0], '_blank', 'noopener');
+      toast(t('prov_login_url'), 'var(--green)');
+    } else {
+      toast(t('prov_login_started'), 'var(--blue)');
+    }
+  } catch (_) { toast(t('prov_login_fail'), 'var(--red)'); }
+  btn.disabled = false;
 }
 
 async function putCredentials(patch, okMsg) {
