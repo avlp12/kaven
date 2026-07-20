@@ -356,6 +356,7 @@
     .grid-table th.sortable:hover { color: var(--muted); }
     .sec-toggle { float: right; cursor: pointer; color: var(--dim); letter-spacing: 1px; }
     .sec-toggle:hover { color: var(--blue); }
+    #aoAdd { margin-left: 10px; font-weight: 700; }
     .asset-row { cursor: pointer; }
     .insp-nav { cursor: pointer; color: var(--dim); padding: 0 5px; letter-spacing: 0; }
     .insp-nav:hover { color: var(--blue); }
@@ -498,7 +499,7 @@
     <aside class="panel" id="leftPanel">
       <div class="panel-head">Watchlist<span class="mono" id="wlDate" style="letter-spacing:.5px"></span></div>
       <div class="panel-body">
-        <div class="sec-head">Areas of Operation<span class="sec-toggle" id="aoToggle"></span></div>
+        <div class="sec-head">Areas of Operation<span class="sec-toggle" id="aoAdd">＋</span><span class="sec-toggle" id="aoToggle"></span></div>
         <div id="aoList"></div>
         <div class="sec-head">Impacted Assets</div>
         <div id="assetList"></div>
@@ -725,6 +726,7 @@ const I18N = {
     tt_copy_json: '이벤트 전체 필드를 JSON으로 복사',
     tt_asset_row: '클릭: Feed에서 이 자산 이벤트 필터',
     tt_nonhttp: '비HTTP 스킴 — 링크 비활성',
+    tt_ao_add: 'AO(감시 지역) 추가·편집 — 설정으로 이동',
     lang_note: 'Intel 리포트는 규칙 기반으로 한국어로 생성됩니다.',
     saved_ok: '저장 완료',
     save_fail: '저장 실패',
@@ -797,6 +799,7 @@ const I18N = {
     tt_copy_json: 'Copy full event as JSON',
     tt_asset_row: 'Click: filter feed by this asset',
     tt_nonhttp: 'Non-HTTP scheme — link disabled',
+    tt_ao_add: 'Add/edit AO (watch regions) — open Settings',
     lang_note: 'Intel reports are rule-generated in Korean.',
     saved_ok: 'Saved',
     save_fail: 'Save failed',
@@ -1217,6 +1220,13 @@ function renderWatchlist() {
       renderFeed(); persistFilters();
     }));
 }
+$('aoAdd').addEventListener('click', () => {
+  // 설정의 감시 지역(AO) 편집 탭으로 바로 이동 — AO 추가/해제
+  state.setTab = 'regions';
+  persist({ setTab: 'regions' });
+  switchView('settings');
+});
+
 $('aoToggle').addEventListener('click', () => {
   if (!$('aoToggle').textContent) return;  // 토글이 보이지 않을 때는 상태를 바꾸지 않음
   state.showQuiet = !state.showQuiet;
@@ -2074,6 +2084,7 @@ function applyLang() {
   $('inspPrev').title = t('tt_prev');
   $('inspNext').title = t('tt_next');
   $('inspClear').title = t('tt_clear');
+  $('aoAdd').title = t('tt_ao_add');
   document.querySelectorAll('.grid-table th.sortable').forEach((th) => { th.title = t('tt_sort'); });
   // 데이터 뷰 재렌더 (지역명/설명 언어 반영)
   renderWatchlist(); renderMap(); renderFeed();
