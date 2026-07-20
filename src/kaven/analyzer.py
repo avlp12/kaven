@@ -76,15 +76,15 @@ severity 기준:
 JSON 배열만 출력하세요. 추가 설명 없이 순수 JSON만."""
 
 
-async def analyze(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
-    """수집된 데이터를 LLM API로 분석."""
+async def analyze_with_status(collected_data: dict[str, Any]) -> dict[str, Any]:
+    """수집 데이터를 분석하고 완료 여부를 명시한 envelope를 반환한다."""
 
     # 데이터 요약 (토큰 절약)
     summary = _summarize_data(collected_data)
 
     if not summary.strip():
         logger.info("분석할 데이터 없음")
-        return []
+        return {"events": [], "status": "ok"}
 
     # OpenAI 호환 API(로컬 LLM 포함) 우선, Gemini/Anthropic 순으로 폴백.
     # Anthropic은 API 키 외에 구독(OAuth) 자격증명도 지원 (anthropic_auth 참조).
@@ -129,6 +129,12 @@ async def analyze(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
     if result is None:
         logger.error("모든 분석 경로 실패")
         result = _fallback_analysis(collected_data)
+        if not result:
+            return {
+                "events": [],
+                "status": "error",
+                "reason": "fallback_incomplete",
+            }
 
     # 모든 이벤트에 collected_at 주입 (없는 경우 현재 시각)
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -153,7 +159,14 @@ async def analyze(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
         if not event.get("event_time"):
             event["event_time"] = earliest_pub.isoformat() if earliest_pub else None
 
-    return result
+    return {"events": result, "status": "ok"}
+
+
+async def analyze(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """하위호환 list API. 런타임은 analyze_with_status를 사용한다."""
+    envelope = await analyze_with_status(collected_data)
+    events = envelope.get("events", [])
+    return events if isinstance(events, list) else []
 
 
 def _summarize_data(collected_data: dict[str, Any]) -> str:
@@ -501,6 +514,8 @@ def _validate_events(
             sanitized["source_url"] = None
         valid.append(sanitized)
 
+    if len(valid) != len(result):
+        return None
     return _dedup_events(valid) if valid else None
 
 

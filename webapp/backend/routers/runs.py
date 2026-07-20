@@ -77,9 +77,12 @@ def list_runs(
 
 @router.post("/once")
 async def trigger_run_once(_admin: None = Depends(require_admin)) -> dict[str, Any]:
-    from src.kaven.kaven import run_once  # heavy import는 호출 시점에
+    from src.kaven.kaven import RunAlreadyInProgress, run_once  # heavy import는 호출 시점에
 
-    result = await run_once()
+    try:
+        result = await run_once()
+    except RunAlreadyInProgress as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not isinstance(result, dict):
         raise HTTPException(status_code=500, detail="Run result is not a JSON object")
     return result

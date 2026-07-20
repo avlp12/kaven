@@ -12,6 +12,7 @@ Kaven Smart System — 지정학 조기경보 + 투자 신호 시스템
 
 import argparse
 import asyncio
+import fcntl
 import hashlib
 import json
 import logging
@@ -19,6 +20,7 @@ import os
 import re as _re
 import sys
 import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -254,10 +256,11 @@ def _load_sent_cache() -> dict:
             if isinstance(loaded, dict) and loaded.get("date") == today:
                 data: dict = loaded
                 data.setdefault("seen_inputs", {})
+                data.setdefault("partial_deliveries", {})
                 return data
         except Exception:
             pass
-    return {"date": today, "sent": [], "seen_inputs": {}}
+    return {"date": today, "sent": [], "seen_inputs": {}, "partial_deliveries": {}}
 
 
 def _save_sent_cache(cache: dict):
@@ -539,6 +542,54 @@ def _analysis_events(result) -> tuple[list[dict], bool]:
     return (events, True)
 
 
+def _delivery_key(event: dict) -> str:
+    """채널별 전송 진행을 재실행 사이에 연결하는 안정적 이벤트 키."""
+    payload = "|".join([
+        str(event.get("event", "")),
+        str(event.get("severity", "")),
+        str(event.get("region", "")),
+        str(event.get("source_url", "")),
+    ])
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _apply_delivery_progress(events: list[dict], cache: dict) -> list[dict]:
+    """이전 주기에 성공한 채널을 이벤트에 부착해 중복 전송을 막는다."""
+    ledger = cache.get("partial_deliveries", {})
+    if not isinstance(ledger, dict):
+        return events
+    for event in events:
+        channels = ledger.get(_delivery_key(event), [])
+        if isinstance(channels, list):
+            event["_delivered_channels"] = [
+                channel for channel in channels if channel in {"topic", "dm"}
+            ]
+    return events
+
+
+def _record_delivery_progress(cache: dict, events: list[dict], signal_result: dict) -> None:
+    """미완료 이벤트의 성공 채널만 저장하고 완료된 항목은 정리한다."""
+    ledger = cache.setdefault("partial_deliveries", {})
+    event_results = signal_result.get("event_results", [])
+    if not isinstance(ledger, dict) or not isinstance(event_results, list):
+        return
+    for item in event_results:
+        if not isinstance(item, dict) or not isinstance(item.get("index"), int):
+            continue
+        index = item["index"]
+        if not 0 <= index < len(events):
+            continue
+        key = _delivery_key(events[index])
+        if item.get("delivery_complete") is True:
+            ledger.pop(key, None)
+            continue
+        channels = item.get("sent_channels", [])
+        if isinstance(channels, list):
+            delivered = [channel for channel in channels if channel in {"topic", "dm"}]
+            if delivered:
+                ledger[key] = delivered
+
+
 def _successfully_processed_events(events: list[dict], signal_result: dict) -> tuple[list[dict], bool]:
     """실제로 필요한 채널 발송을 마친 이벤트와 전체 성공 여부를 반환한다."""
     event_results = signal_result.get("event_results")
@@ -559,10 +610,32 @@ def _successfully_processed_events(events: list[dict], signal_result: dict) -> t
     return events, True
 
 
-async def run_once():
+class RunAlreadyInProgress(RuntimeError):
+    """다른 watcher/API 프로세스가 이미 수집 주기를 실행 중임."""
+
+
+@contextmanager
+def _run_lock():
+    """run_once 전체 read-modify-write 구간을 프로세스 간 직렬화한다."""
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    lock_path = LOG_DIR / "run.lock"
+    with lock_path.open("a+") as lock_file:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RunAlreadyInProgress("Kaven run already in progress") from exc
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+async def _run_once_unlocked():
     """1회 실행: 수집 → 분석 → 중복제거 → 신호 발송 → 로그 저장."""
-    from analyzer import analyze
+    import analyzer as analyzer_module
     from signal_generator import process_signals
+
+    analyze_fn = getattr(analyzer_module, "analyze_with_status", analyzer_module.analyze)
 
     start = datetime.now(timezone.utc)
     logger.info(f"Kaven v{__version__} 실행 시작: {start.isoformat()}")
@@ -581,7 +654,7 @@ async def run_once():
     else:
         logger.info(f"신규 자극 {len(new_sigs)}건 — 분석 엔진 실행 중...")
         try:
-            analysis_result = await analyze(collected)
+            analysis_result = await analyze_fn(collected)
         except Exception as e:
             logger.error(f"분석 실패 — 입력을 재시도 대상으로 유지: {e}")
             analysis_result = None
@@ -593,6 +666,7 @@ async def run_once():
 
         # 3. 중복 제거 (이미 전송한 이벤트 필터링)
         events_to_send = _deduplicate_events(events, cache) if analysis_completed else []
+        events_to_send = _apply_delivery_progress(events_to_send, cache)
         logger.info(f"중복 제거 후 발송 대상: {len(events_to_send)}건")
 
     # 4. 신호 발송
@@ -600,6 +674,7 @@ async def run_once():
         logger.info("신호 발송 중...")
         signal_result = await process_signals(events_to_send)
         logger.info(f"발송 결과: {signal_result}")
+        _record_delivery_progress(cache, events_to_send, signal_result)
         sent_events, delivery_completed = _successfully_processed_events(events_to_send, signal_result)
         _update_cache(cache, sent_events)
         analysis_completed = analysis_completed and delivery_completed
@@ -640,6 +715,12 @@ async def run_once():
     logger.info(f"Kaven 실행 완료: {(end - start).total_seconds():.1f}초 소요")
 
     return log_entry
+
+
+async def run_once():
+    """단일 수집 주기를 프로세스 간 lock 아래에서 실행한다."""
+    with _run_lock():
+        return await _run_once_unlocked()
 
 
 async def run_watch(interval_minutes: int = 5):

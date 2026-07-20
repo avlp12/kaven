@@ -67,7 +67,12 @@ async def process_signals(events: list[dict[str, Any]]) -> dict[str, Any]:
     for index, event in enumerate(events):
         severity = event.get("severity", 1)
         required_channels = []
-        sent_channels = []
+        previously_delivered = event.get("_delivered_channels", [])
+        sent_channels = [
+            channel
+            for channel in previously_delivered
+            if channel in {"topic", "dm"}
+        ] if isinstance(previously_delivered, list) else []
         event_errors = []
 
         # 로그 저장 (모든 severity)
@@ -81,30 +86,32 @@ async def process_signals(events: list[dict[str, Any]]) -> dict[str, Any]:
         # severity 3+: topic:5052 (Kaven 전용) 알림만
         if severity >= 3:
             required_channels.append("topic")
-            try:
-                msg = _format_message(event)
-                await _send_telegram(msg, CHAT_ID, TOPIC_MAVEN)
-                sent_count += 1
-                sent_channels.append("topic")
-                logger.info(f"topic:5052 Kaven 알림 발송 완료 (severity {severity})")
-            except Exception as e:
-                logger.error(f"topic:5052 알림 실패: {e}")
-                errors.append(str(e))
-                event_errors.append(f"topic: {e}")
+            if "topic" not in sent_channels:
+                try:
+                    msg = _format_message(event)
+                    await _send_telegram(msg, CHAT_ID, TOPIC_MAVEN)
+                    sent_count += 1
+                    sent_channels.append("topic")
+                    logger.info(f"topic:5052 Kaven 알림 발송 완료 (severity {severity})")
+                except Exception as e:
+                    logger.error(f"topic:5052 알림 실패: {e}")
+                    errors.append(str(e))
+                    event_errors.append(f"topic: {e}")
 
         # severity 5: 개인 DM (긴급만)
         if severity >= 5:
             required_channels.append("dm")
-            try:
-                msg = _format_urgent_message(event)
-                await _send_telegram_dm(msg, USER_DM)
-                sent_count += 1
-                sent_channels.append("dm")
-                logger.info("🔴 긴급 DM 발송 완료")
-            except Exception as e:
-                logger.error(f"긴급 DM 실패: {e}")
-                errors.append(str(e))
-                event_errors.append(f"dm: {e}")
+            if "dm" not in sent_channels:
+                try:
+                    msg = _format_urgent_message(event)
+                    await _send_telegram_dm(msg, USER_DM)
+                    sent_count += 1
+                    sent_channels.append("dm")
+                    logger.info("🔴 긴급 DM 발송 완료")
+                except Exception as e:
+                    logger.error(f"긴급 DM 실패: {e}")
+                    errors.append(str(e))
+                    event_errors.append(f"dm: {e}")
 
         event_results.append({
             "index": index,

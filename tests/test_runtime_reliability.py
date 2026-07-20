@@ -199,3 +199,52 @@ def test_save_sent_cache_replaces_file_atomically(monkeypatch, tmp_path: Path) -
     assert destination == tmp_path / "sent_cache.json"
     assert not source.exists()
     assert json.loads(destination.read_text())["date"] == "2026-07-20"
+
+
+def test_process_signals_retries_only_channels_not_already_delivered(monkeypatch) -> None:
+    calls: list[str] = []
+
+    async def topic(_text, _chat_id, _thread_id):
+        calls.append("topic")
+
+    async def dm(_text, _user_id):
+        calls.append("dm")
+
+    monkeypatch.setattr(signal_generator, "_send_telegram", topic)
+    monkeypatch.setattr(signal_generator, "_send_telegram_dm", dm)
+
+    result = asyncio.run(
+        signal_generator.process_signals(
+            [{"event": "긴급", "severity": 5, "_delivered_channels": ["topic"]}]
+        )
+    )
+
+    assert calls == ["dm"]
+    assert result["event_results"][0]["sent_channels"] == ["topic", "dm"]
+    assert result["event_results"][0]["delivery_complete"] is True
+
+
+def test_partial_delivery_ledger_is_persisted_and_reapplied() -> None:
+    event = {"event": "긴급", "severity": 5, "region": "korea", "source_url": "https://example.test/1"}
+    cache = {"sent": [], "seen_inputs": {}, "partial_deliveries": {}}
+    result = {
+        "event_results": [
+            {"index": 0, "sent_channels": ["topic"], "delivery_complete": False}
+        ]
+    }
+
+    kaven._record_delivery_progress(cache, [event], result)
+    prepared = kaven._apply_delivery_progress([event.copy()], cache)
+
+    assert prepared[0]["_delivered_channels"] == ["topic"]
+
+
+def test_run_lock_rejects_concurrent_execution(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(kaven, "LOG_DIR", tmp_path)
+
+    with kaven._run_lock():
+        try:
+            with kaven._run_lock():
+                raise AssertionError("second lock acquisition must fail")
+        except kaven.RunAlreadyInProgress:
+            pass

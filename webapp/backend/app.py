@@ -8,13 +8,12 @@ Kaven Web API — FastAPI 앱 조립.
 
 from __future__ import annotations
 
-import os
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.kaven.version import __version__
 from webapp.backend.routers import agent, intel, ops, portfolio, runs, system
+from webapp.backend.security import allowed_origins
 
 
 def create_app() -> FastAPI:
@@ -26,17 +25,9 @@ def create_app() -> FastAPI:
             "AI 에이전트 연동은 GET /agent/manifest 참조 (MCP: python -m src.kaven.mcp_server)."
         ),
     )
-    allowed_origins = [
-        origin.strip()
-        for origin in os.getenv(
-            "KAVEN_ALLOWED_ORIGINS",
-            "http://127.0.0.1:8080,http://localhost:8080",
-        ).split(",")
-        if origin.strip()
-    ]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=allowed_origins,
+        allow_origins=allowed_origins(),
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],

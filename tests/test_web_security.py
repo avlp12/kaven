@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -34,6 +34,16 @@ def test_mutations_without_token_reject_non_loopback_client(client: TestClient) 
     assert external.put("/config/assets", json=_asset_payload()).status_code == 403
     # Authentication runs before the heavy run_once import/execution.
     assert external.post("/runs/once").status_code == 403
+
+
+def test_loopback_mutation_rejects_untrusted_browser_origin(client: TestClient) -> None:
+    with patch("src.kaven.kaven.run_once", new=AsyncMock(return_value={"executed": True})) as run:
+        denied = client.post("/runs/once", headers={"Origin": "https://evil.example"})
+        allowed = client.post("/runs/once", headers={"Origin": "http://localhost:8080"})
+
+    assert denied.status_code == 403
+    assert allowed.status_code == 200
+    run.assert_awaited_once()
 
 
 def test_admin_token_required_and_supported_in_both_headers(monkeypatch: pytest.MonkeyPatch) -> None:

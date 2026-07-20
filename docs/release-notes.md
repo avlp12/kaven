@@ -20,17 +20,20 @@
 3. **재시도·전송 신뢰성**
    - social-only 신규 게시물도 입력 트리거 생성
    - 분석 실패 입력과 텔레그램 전송 실패 이벤트를 완료 캐시에 기록하지 않음
-   - 이벤트별 전송 채널 결과 추적, sent cache 원자적 저장
+   - 이벤트별 채널 진행 ledger로 topic 성공/DM 실패 시 실패 채널만 재시도
+   - sent cache 원자적 저장 및 프로세스 간 run lock으로 동시 실행 차단
 4. **웹 관리 보안**
    - 상태 변경 API에 관리자 토큰 또는 loopback 제한 적용
+   - loopback 모드의 Host/Origin 검증으로 localhost CSRF 차단
    - CORS wildcard 제거, CLI 실행 파일 allowlist 도입
-   - Docker build context 비밀 제외 및 non-root 컨테이너 실행
+   - Docker build context의 모든 `.env` 제외, non-root 실행과 named log volume 적용
 5. **품질 게이트**
    - 결정적 replay fixture 포함, 개발 TestClient 의존성 명시
    - 전체 소스 mypy 오류 정리 및 버전 단일화
+   - PR/main push에서 pytest·ruff·mypy를 실행하는 CI 추가
 
 ### 검증 결과
-- `pytest -q` → 104 passed
+- `pytest -q` → 112 passed
 - `ruff check .` → All checks passed
 - `mypy src webapp` → Success: no issues found in 30 source files
 

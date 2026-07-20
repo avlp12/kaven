@@ -23,7 +23,7 @@ def _parse(payload, urls=("https://example.com/report/1",)):
     return analyzer._parse_analysis_response(json.dumps(payload), set(urls))
 
 
-def test_schema_validation_isolates_invalid_events_and_sanitizes_source_url():
+def test_schema_validation_rejects_partial_batches_to_avoid_silent_event_loss():
     valid = dict(VALID_EVENT)
     untrusted_url = dict(VALID_EVENT, event="대만 해협 긴장 고조", source_url="https://evil.example/invented")
     invalid_events = [
@@ -42,12 +42,16 @@ def test_schema_validation_isolates_invalid_events_and_sanitizes_source_url():
         dict(VALID_EVENT, affected_assets=["WTI", 3]),
     ]
 
-    result = _parse([*invalid_events, valid, untrusted_url])
+    assert _parse([*invalid_events, valid, untrusted_url]) is None
+
+
+def test_schema_validation_sanitizes_untrusted_source_url_for_valid_batch():
+    valid = dict(VALID_EVENT)
+    untrusted_url = dict(VALID_EVENT, event="대만 해협 긴장 고조", source_url="https://evil.example/invented")
+    result = _parse([valid, untrusted_url])
 
     assert result is not None
-    assert [event["event"] for event in result] == [valid["event"], untrusted_url["event"]]
     assert result[0]["source_url"] == valid["source_url"]
-    assert result[0]["confidence"] == valid["confidence"]
     assert result[1]["source_url"] is None
 
 
@@ -118,6 +122,26 @@ def test_all_invalid_providers_reach_rule_fallback(monkeypatch):
 
     assert result[0]["fallback"] is True
     assert result[0]["event"].startswith("선박 이상 감지")
+
+
+def test_all_provider_failure_keeps_unhandled_news_retryable(monkeypatch):
+    async def invalid_openai(**kwargs):
+        return None
+
+    async def no_cli(summary):
+        return None
+
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://localhost:9999")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr(analyzer, "resolve_anthropic_auth", lambda: None)
+    monkeypatch.setattr(analyzer, "_call_openai_compatible", invalid_openai)
+    monkeypatch.setattr(analyzer, "_call_cli_providers", no_cli)
+
+    result = asyncio.run(analyzer.analyze_with_status({"news": [{"title": "단독 긴급 속보"}]}))
+
+    assert result["events"] == []
+    assert result["status"] == "error"
+    assert result["reason"] == "fallback_incomplete"
 
 
 def test_summary_and_prompt_mark_untrusted_sources_with_ids():

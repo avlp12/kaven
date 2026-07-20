@@ -410,6 +410,8 @@ FastAPI 문서: `GET /docs` (Swagger UI), `GET /openapi.json`
 상태 변경 API는 `KAVEN_ADMIN_TOKEN` 미설정 시 loopback 요청만 허용합니다. 토큰을
 설정한 원격 운영에서는 `Authorization: Bearer <token>` 또는
 `X-Kaven-Admin-Token: <token>` 헤더를 사용합니다.
+loopback 모드에서도 브라우저 요청은 허용된 `Origin`과 로컬 `Host`를 모두
+검증하므로 다른 웹사이트에서 localhost 상태 변경을 실행할 수 없습니다.
 
 ## 8) 프로젝트 구조
 

@@ -8,6 +8,17 @@ import secrets
 
 from fastapi import HTTPException, Request, status
 
+DEFAULT_ALLOWED_ORIGINS = "http://127.0.0.1:8080,http://localhost:8080"
+
+
+def allowed_origins() -> list[str]:
+    """CORS와 loopback CSRF 검사가 공유하는 명시적 origin 목록."""
+    return [
+        origin.strip()
+        for origin in os.getenv("KAVEN_ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS).split(",")
+        if origin.strip()
+    ]
+
 
 def _is_local_client(host: str) -> bool:
     """실제 루프백 주소와 Starlette TestClient의 전용 호스트만 허용한다."""
@@ -28,6 +39,18 @@ def require_admin(request: Request) -> None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Admin mutations are restricted to loopback clients",
+            )
+        request_host = request.url.hostname or ""
+        if request_host not in {"127.0.0.1", "localhost", "::1", "testserver"}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin mutations require a loopback Host header",
+            )
+        origin = request.headers.get("origin", "").strip()
+        if origin and origin not in allowed_origins():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Untrusted browser Origin",
             )
         return
 
