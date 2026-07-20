@@ -54,12 +54,7 @@ SIGNAL_LABEL = {
 
 
 async def process_signals(events: list[dict[str, Any]]) -> dict[str, Any]:
-    """
-    분석된 이벤트 목록을 severity 기반으로 알림 발송.
-
-    Returns:
-        발송 결과 요약
-    """
+    """분석 이벤트를 발송하고 이벤트·채널별 실제 성공 결과를 반환한다."""
     if not events:
         logger.info("발송할 이벤트 없음")
         return {"sent": 0, "logged": 0}
@@ -67,9 +62,13 @@ async def process_signals(events: list[dict[str, Any]]) -> dict[str, Any]:
     sent_count = 0
     logged_count = 0
     errors = []
+    event_results = []
 
-    for event in events:
+    for index, event in enumerate(events):
         severity = event.get("severity", 1)
+        required_channels = []
+        sent_channels = []
+        event_errors = []
 
         # 로그 저장 (모든 severity)
         logged_count += 1
@@ -81,30 +80,45 @@ async def process_signals(events: list[dict[str, Any]]) -> dict[str, Any]:
 
         # severity 3+: topic:5052 (Kaven 전용) 알림만
         if severity >= 3:
+            required_channels.append("topic")
             try:
                 msg = _format_message(event)
                 await _send_telegram(msg, CHAT_ID, TOPIC_MAVEN)
                 sent_count += 1
+                sent_channels.append("topic")
                 logger.info(f"topic:5052 Kaven 알림 발송 완료 (severity {severity})")
             except Exception as e:
                 logger.error(f"topic:5052 알림 실패: {e}")
                 errors.append(str(e))
+                event_errors.append(f"topic: {e}")
 
         # severity 5: 개인 DM (긴급만)
         if severity >= 5:
+            required_channels.append("dm")
             try:
                 msg = _format_urgent_message(event)
                 await _send_telegram_dm(msg, USER_DM)
                 sent_count += 1
+                sent_channels.append("dm")
                 logger.info("🔴 긴급 DM 발송 완료")
             except Exception as e:
                 logger.error(f"긴급 DM 실패: {e}")
                 errors.append(str(e))
+                event_errors.append(f"dm: {e}")
+
+        event_results.append({
+            "index": index,
+            "required_channels": required_channels,
+            "sent_channels": sent_channels,
+            "delivery_complete": len(sent_channels) == len(required_channels),
+            "errors": event_errors,
+        })
 
     return {
         "sent": sent_count,
         "logged": logged_count,
         "errors": errors if errors else None,
+        "event_results": event_results,
     }
 
 

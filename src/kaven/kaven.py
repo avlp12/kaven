@@ -18,6 +18,7 @@ import logging
 import os
 import re as _re
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -259,8 +260,25 @@ def _load_sent_cache() -> dict:
 
 
 def _save_sent_cache(cache: dict):
+    """Write atomically so an interrupted run cannot truncate the cache."""
     cache_file = LOG_DIR / "sent_cache.json"
-    cache_file.write_text(json.dumps(cache, ensure_ascii=False))
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(cache, ensure_ascii=False)
+    temp_path: str | None = None
+    try:
+        fd, temp_path = tempfile.mkstemp(prefix=".sent_cache.", suffix=".tmp", dir=LOG_DIR)
+        with os.fdopen(fd, "w", encoding="utf-8") as temp_file:
+            temp_file.write(payload)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        os.replace(temp_path, cache_file)
+        temp_path = None
+    finally:
+        if temp_path:
+            try:
+                os.unlink(temp_path)
+            except FileNotFoundError:
+                pass
 
 
 def _find_similar(event: dict, sent_list: list[dict]) -> dict | None:
@@ -441,6 +459,7 @@ def _trigger_signatures(collected: dict) -> set[str]:
     LLM 분석을 새로 돌릴 가치가 있는 '자극 입력'의 시그니처 집합.
 
     - 뉴스: url (없으면 title) 단위 — 새 기사가 곧 새 자극
+    - 소셜: X/Twitter status URL, 없으면 작성자+정규화 본문의 안정적 해시
     - AIS/ADSB: anomaly 있는 항목만, zone+anomaly+규모버킷 단위
       (지속되는 동일 이상은 같은 시그니처 → 반복 트리거 안 됨)
     정상 수치(anomaly 없음)는 자극으로 보지 않는다.
@@ -451,6 +470,25 @@ def _trigger_signatures(collected: dict) -> set[str]:
         key = (item.get("url") or "").strip() or (item.get("title") or "").strip()
         if key:
             sigs.add(f"news:{key}")
+
+    for item in collected.get("social", []):
+        url = str(item.get("url") or "").strip()
+        status_match = _re.search(
+            r"https?://(?:www\.)?(?:x|twitter)\.com/[^/?#\s]+/status/(\d+)",
+            url,
+            flags=_re.IGNORECASE,
+        )
+        tweet_id = str(item.get("tweet_id") or "").strip()
+        if status_match:
+            sigs.add(f"social:url:x.com/status/{status_match.group(1)}")
+        elif tweet_id:
+            sigs.add(f"social:url:x.com/status/{tweet_id}")
+        else:
+            text = " ".join(str(item.get("text") or "").casefold().split())
+            author = " ".join(str(item.get("author") or "").casefold().split())
+            if text:
+                digest = hashlib.sha256(f"{author}|{text}".encode("utf-8")).hexdigest()
+                sigs.add(f"social:hash:{digest}")
 
     for item in collected.get("ais", []):
         if item.get("anomaly"):
@@ -481,6 +519,45 @@ def _record_seen_inputs(cache: dict, signatures: set[str]):
         seen[s] = now
 
 
+def _analysis_events(result) -> tuple[list[dict], bool]:
+    """Legacy lists and optional analyzer status envelopes를 안전하게 통합한다."""
+    if isinstance(result, list):
+        return (result, all(isinstance(event, dict) for event in result))
+    if not isinstance(result, dict):
+        return ([], False)
+
+    events = result.get("events")
+    if not isinstance(events, list) or not all(isinstance(event, dict) for event in events):
+        return ([], False)
+
+    status = result.get("status")
+    if status is not None and str(status).casefold() not in {"ok", "success", "completed", "empty"}:
+        return ([], False)
+    if status is None and result.get("valid") is not True:
+        return ([], False)
+    return (events, True)
+
+
+def _successfully_processed_events(events: list[dict], signal_result: dict) -> tuple[list[dict], bool]:
+    """실제로 필요한 채널 발송을 마친 이벤트와 전체 성공 여부를 반환한다."""
+    event_results = signal_result.get("event_results")
+    if isinstance(event_results, list):
+        completed_indices = {
+            item.get("index")
+            for item in event_results
+            if isinstance(item, dict) and item.get("delivery_complete") is True
+        }
+        successful = [event for index, event in enumerate(events) if index in completed_indices]
+        return successful, len(successful) == len(events)
+
+    # 구형/custom generator 호환. 오류가 있으면 alert별 성공을 특정할 수 없으므로
+    # 텔레그램이 필요 없는 log-only 이벤트만 캐시한다.
+    if signal_result.get("errors"):
+        successful = [event for event in events if event.get("severity", 1) < 3]
+        return successful, len(successful) == len(events)
+    return events, True
+
+
 async def run_once():
     """1회 실행: 수집 → 분석 → 중복제거 → 신호 발송 → 로그 저장."""
     from analyzer import analyze
@@ -495,34 +572,44 @@ async def run_once():
     # 2. 입력 게이팅 — 새 자극(신규 뉴스/이상)이 없으면 LLM 분석 자체를 스킵
     cache = _load_sent_cache()
     new_sigs = _new_trigger_signatures(collected, cache)
+    analysis_completed = False
     if not new_sigs:
         logger.info("신규 입력 없음 — LLM 분석/발송 건너뜀 (동일 자극 반복 방지)")
         events = []
         events_to_send = []
     else:
         logger.info(f"신규 자극 {len(new_sigs)}건 — 분석 엔진 실행 중...")
-        events = await analyze(collected)
-        logger.info(f"분석 완료: {len(events)}건 이벤트 감지")
+        try:
+            analysis_result = await analyze(collected)
+        except Exception as e:
+            logger.error(f"분석 실패 — 입력을 재시도 대상으로 유지: {e}")
+            analysis_result = None
+        events, analysis_completed = _analysis_events(analysis_result)
+        if analysis_completed:
+            logger.info(f"분석 완료: {len(events)}건 이벤트 감지")
+        else:
+            logger.error("분석 결과가 유효하지 않음 — 입력을 재시도 대상으로 유지")
 
         # 3. 중복 제거 (이미 전송한 이벤트 필터링)
-        events_to_send = _deduplicate_events(events, cache)
+        events_to_send = _deduplicate_events(events, cache) if analysis_completed else []
         logger.info(f"중복 제거 후 발송 대상: {len(events_to_send)}건")
-
-    # 처리한 자극은 발송 여부와 무관하게 기록 (다음 사이클 재트리거 방지)
-    _record_seen_inputs(cache, _trigger_signatures(collected))
 
     # 4. 신호 발송
     if events_to_send:
         logger.info("신호 발송 중...")
         signal_result = await process_signals(events_to_send)
         logger.info(f"발송 결과: {signal_result}")
-        # 전송 완료 이벤트 캐시 업데이트
-        _update_cache(cache, events_to_send)
-        _save_sent_cache(cache)
+        sent_events, delivery_completed = _successfully_processed_events(events_to_send, signal_result)
+        _update_cache(cache, sent_events)
+        analysis_completed = analysis_completed and delivery_completed
     else:
         signal_result = {"sent": 0, "logged": 0}
-        _save_sent_cache(cache)  # seen_inputs 갱신분 보존
         logger.info("이상 이벤트 없음 또는 전부 중복 — 신호 발송 건너뜀")
+
+    # 분석과 필요한 전송이 모두 정상 완료된 입력만 소비한다.
+    if analysis_completed:
+        _record_seen_inputs(cache, new_sigs)
+    _save_sent_cache(cache)
 
     # 4. 로그 저장
     end = datetime.now(timezone.utc)
