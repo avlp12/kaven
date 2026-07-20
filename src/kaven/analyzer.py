@@ -95,6 +95,7 @@ async def analyze_with_status(collected_data: dict[str, Any]) -> dict[str, Any]:
     anthropic_auth = resolve_anthropic_auth()
 
     result = None
+    used_rule_fallback = False
     if openai_base_url:
         try:
             result = await _call_openai_compatible(
@@ -129,6 +130,7 @@ async def analyze_with_status(collected_data: dict[str, Any]) -> dict[str, Any]:
     if result is None:
         logger.error("모든 분석 경로 실패")
         result = _fallback_analysis(collected_data)
+        used_rule_fallback = True
         if not result:
             return {
                 "events": [],
@@ -159,6 +161,14 @@ async def analyze_with_status(collected_data: dict[str, Any]) -> dict[str, Any]:
         if not event.get("event_time"):
             event["event_time"] = earliest_pub.isoformat() if earliest_pub else None
 
+    if used_rule_fallback and (
+        collected_data.get("news") or collected_data.get("social")
+    ):
+        return {
+            "events": result,
+            "status": "partial",
+            "reason": "fallback_incomplete",
+        }
     return {"events": result, "status": "ok"}
 
 

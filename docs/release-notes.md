@@ -20,7 +20,8 @@
 3. **재시도·전송 신뢰성**
    - social-only 신규 게시물도 입력 트리거 생성
    - 분석 실패 입력과 텔레그램 전송 실패 이벤트를 완료 캐시에 기록하지 않음
-   - 이벤트별 채널 진행 ledger로 topic 성공/DM 실패 시 실패 채널만 재시도
+   - 부분 전송 이벤트 원문과 채널 진행을 보존해 재분석 없이 실패 채널만 재시도
+   - 규칙 fallback이 뉴스·소셜을 처리하지 못한 경우 partial로 유지해 입력 재분석 보장
    - sent cache 원자적 저장 및 프로세스 간 run lock으로 동시 실행 차단
 4. **웹 관리 보안**
    - 상태 변경 API에 관리자 토큰 또는 loopback 제한 적용
@@ -33,7 +34,7 @@
    - PR/main push에서 pytest·ruff·mypy를 실행하는 CI 추가
 
 ### 검증 결과
-- `pytest -q` → 112 passed
+- `pytest -q` → 115 passed
 - `ruff check .` → All checks passed
 - `mypy src webapp` → Success: no issues found in 30 source files
 

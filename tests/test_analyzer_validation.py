@@ -144,6 +144,25 @@ def test_all_provider_failure_keeps_unhandled_news_retryable(monkeypatch):
     assert result["reason"] == "fallback_incomplete"
 
 
+def test_rule_fallback_marks_mixed_news_and_sensor_input_partial(monkeypatch):
+    async def no_cli(summary):
+        return None
+
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr(analyzer, "resolve_anthropic_auth", lambda: None)
+    monkeypatch.setattr(analyzer, "_call_cli_providers", no_cli)
+
+    result = asyncio.run(analyzer.analyze_with_status({
+        "news": [{"title": "단독 긴급 속보", "url": "https://example.test/news"}],
+        "ais": [{"zone_name": "호르무즈", "anomaly": "운항량 급감"}],
+    }))
+
+    assert result["status"] == "partial"
+    assert result["reason"] == "fallback_incomplete"
+    assert result["events"][0]["fallback"] is True
+
+
 def test_summary_and_prompt_mark_untrusted_sources_with_ids():
     summary = analyzer._summarize_data(
         {

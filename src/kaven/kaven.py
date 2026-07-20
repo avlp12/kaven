@@ -534,10 +534,12 @@ def _analysis_events(result) -> tuple[list[dict], bool]:
     if not isinstance(events, list) or not all(isinstance(event, dict) for event in events):
         return ([], False)
 
-    status = result.get("status")
-    if status is not None and str(status).casefold() not in {"ok", "success", "completed", "empty"}:
+    status = str(result.get("status", "")).casefold()
+    if status == "partial":
+        return (events, False)
+    if status and status not in {"ok", "success", "completed", "empty"}:
         return ([], False)
-    if status is None and result.get("valid") is not True:
+    if not status and result.get("valid") is not True:
         return ([], False)
     return (events, True)
 
@@ -559,12 +561,31 @@ def _apply_delivery_progress(events: list[dict], cache: dict) -> list[dict]:
     if not isinstance(ledger, dict):
         return events
     for event in events:
-        channels = ledger.get(_delivery_key(event), [])
+        entry = ledger.get(_delivery_key(event), [])
+        channels = entry.get("sent_channels", []) if isinstance(entry, dict) else entry
         if isinstance(channels, list):
             event["_delivered_channels"] = [
                 channel for channel in channels if channel in {"topic", "dm"}
             ]
     return events
+
+
+def _pending_delivery_events(cache: dict) -> list[dict]:
+    """재분석하지 않고 실패 채널만 재시도할 원본 이벤트를 복원한다."""
+    ledger = cache.get("partial_deliveries", {})
+    if not isinstance(ledger, dict):
+        return []
+    pending: list[dict] = []
+    for entry in ledger.values():
+        if not isinstance(entry, dict) or not isinstance(entry.get("event"), dict):
+            continue
+        event = dict(entry["event"])
+        channels = entry.get("sent_channels", [])
+        event["_delivered_channels"] = [
+            channel for channel in channels if channel in {"topic", "dm"}
+        ] if isinstance(channels, list) else []
+        pending.append(event)
+    return pending
 
 
 def _record_delivery_progress(cache: dict, events: list[dict], signal_result: dict) -> None:
@@ -587,7 +608,15 @@ def _record_delivery_progress(cache: dict, events: list[dict], signal_result: di
         if isinstance(channels, list):
             delivered = [channel for channel in channels if channel in {"topic", "dm"}]
             if delivered:
-                ledger[key] = delivered
+                stored_event = {
+                    key_name: value
+                    for key_name, value in events[index].items()
+                    if not key_name.startswith("_")
+                }
+                ledger[key] = {
+                    "event": stored_event,
+                    "sent_channels": delivered,
+                }
 
 
 def _successfully_processed_events(events: list[dict], signal_result: dict) -> tuple[list[dict], bool]:
@@ -647,9 +676,15 @@ async def _run_once_unlocked():
     cache = _load_sent_cache()
     new_sigs = _new_trigger_signatures(collected, cache)
     analysis_completed = False
-    if not new_sigs:
+    pending_events = _pending_delivery_events(cache)
+    if pending_events:
+        logger.info(f"미완료 채널 전송 {len(pending_events)}건 우선 재시도")
+        new_sigs = set()
+        events = pending_events
+        events_to_send = pending_events
+    elif not new_sigs:
         logger.info("신규 입력 없음 — LLM 분석/발송 건너뜀 (동일 자극 반복 방지)")
-        events: list[dict] = []
+        events = []
         events_to_send = []
     else:
         logger.info(f"신규 자극 {len(new_sigs)}건 — 분석 엔진 실행 중...")
@@ -665,7 +700,7 @@ async def _run_once_unlocked():
             logger.error("분석 결과가 유효하지 않음 — 입력을 재시도 대상으로 유지")
 
         # 3. 중복 제거 (이미 전송한 이벤트 필터링)
-        events_to_send = _deduplicate_events(events, cache) if analysis_completed else []
+        events_to_send = _deduplicate_events(events, cache) if events else []
         events_to_send = _apply_delivery_progress(events_to_send, cache)
         logger.info(f"중복 제거 후 발송 대상: {len(events_to_send)}건")
 

@@ -5,6 +5,7 @@ import os
 import sys
 import types
 import asyncio
+from datetime import datetime
 from pathlib import Path
 
 
@@ -235,8 +236,72 @@ def test_partial_delivery_ledger_is_persisted_and_reapplied() -> None:
 
     kaven._record_delivery_progress(cache, [event], result)
     prepared = kaven._apply_delivery_progress([event.copy()], cache)
+    pending = kaven._pending_delivery_events(cache)
 
     assert prepared[0]["_delivered_channels"] == ["topic"]
+    assert pending == [{**event, "_delivered_channels": ["topic"]}]
+
+
+def test_partial_analysis_can_emit_valid_fallback_without_consuming_inputs() -> None:
+    event = {"event": "AIS fallback", "severity": 3}
+    assert kaven._analysis_events({"events": [event], "status": "partial"}) == ([event], False)
+
+
+def test_pending_delivery_retries_saved_event_without_reanalysis(monkeypatch, tmp_path: Path) -> None:
+    event = {
+        "event": "원본 긴급 문구",
+        "severity": 5,
+        "region": "korea",
+        "source_url": "https://example.test/1",
+    }
+    cache = {
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "sent": [],
+        "seen_inputs": {},
+        "partial_deliveries": {},
+    }
+    kaven._record_delivery_progress(
+        cache,
+        [event],
+        {"event_results": [{"index": 0, "sent_channels": ["topic"], "delivery_complete": False}]},
+    )
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "sent_cache.json").write_text(json.dumps(cache), encoding="utf-8")
+    delivered: list[dict] = []
+
+    async def collect():
+        return {"news": [{"url": "https://example.test/new"}], "social": [], "ais": [], "adsb": []}
+
+    async def should_not_analyze(_collected):
+        raise AssertionError("pending delivery must not trigger reanalysis")
+
+    async def process(events):
+        delivered.extend(events)
+        return {
+            "sent": 1,
+            "logged": 1,
+            "errors": None,
+            "event_results": [
+                {
+                    "index": 0,
+                    "required_channels": ["topic", "dm"],
+                    "sent_channels": ["topic", "dm"],
+                    "delivery_complete": True,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(kaven, "LOG_DIR", tmp_path)
+    monkeypatch.setattr(kaven, "run_collectors", collect)
+    monkeypatch.setitem(sys.modules, "analyzer", types.SimpleNamespace(analyze=should_not_analyze))
+    monkeypatch.setitem(sys.modules, "signal_generator", types.SimpleNamespace(process_signals=process))
+
+    asyncio.run(kaven.run_once())
+    saved = json.loads((tmp_path / "sent_cache.json").read_text())
+
+    assert delivered[0]["event"] == "원본 긴급 문구"
+    assert delivered[0]["_delivered_channels"] == ["topic"]
+    assert saved["partial_deliveries"] == {}
 
 
 def test_run_lock_rejects_concurrent_execution(monkeypatch, tmp_path: Path) -> None:
