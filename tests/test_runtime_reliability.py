@@ -239,7 +239,7 @@ def test_partial_delivery_ledger_is_persisted_and_reapplied() -> None:
     pending = kaven._pending_delivery_events(cache)
 
     assert prepared[0]["_delivered_channels"] == ["topic"]
-    assert pending == [{**event, "_delivered_channels": ["topic"]}]
+    assert pending == [{**event, "_delivered_channels": ["topic"], "_input_signatures": []}]
 
 
 def test_partial_analysis_can_emit_valid_fallback_without_consuming_inputs() -> None:
@@ -264,6 +264,7 @@ def test_pending_delivery_retries_saved_event_without_reanalysis(monkeypatch, tm
         cache,
         [event],
         {"event_results": [{"index": 0, "sent_channels": ["topic"], "delivery_complete": False}]},
+        {"news:https://example.test/new"},
     )
     tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "sent_cache.json").write_text(json.dumps(cache), encoding="utf-8")
@@ -302,6 +303,10 @@ def test_pending_delivery_retries_saved_event_without_reanalysis(monkeypatch, tm
     assert delivered[0]["event"] == "원본 긴급 문구"
     assert delivered[0]["_delivered_channels"] == ["topic"]
     assert saved["partial_deliveries"] == {}
+    assert "news:https://example.test/new" in saved["seen_inputs"]
+    assert kaven._new_trigger_signatures(
+        {"news": [{"url": "https://example.test/new"}]}, saved
+    ) == set()
 
 
 def test_run_lock_rejects_concurrent_execution(monkeypatch, tmp_path: Path) -> None:

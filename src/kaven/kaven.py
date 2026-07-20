@@ -584,11 +584,20 @@ def _pending_delivery_events(cache: dict) -> list[dict]:
         event["_delivered_channels"] = [
             channel for channel in channels if channel in {"topic", "dm"}
         ] if isinstance(channels, list) else []
+        input_signatures = entry.get("input_signatures", [])
+        event["_input_signatures"] = [
+            signature for signature in input_signatures if isinstance(signature, str)
+        ] if isinstance(input_signatures, list) else []
         pending.append(event)
     return pending
 
 
-def _record_delivery_progress(cache: dict, events: list[dict], signal_result: dict) -> None:
+def _record_delivery_progress(
+    cache: dict,
+    events: list[dict],
+    signal_result: dict,
+    input_signatures: set[str] | None = None,
+) -> None:
     """미완료 이벤트의 성공 채널만 저장하고 완료된 항목은 정리한다."""
     ledger = cache.setdefault("partial_deliveries", {})
     event_results = signal_result.get("event_results", [])
@@ -616,6 +625,14 @@ def _record_delivery_progress(cache: dict, events: list[dict], signal_result: di
                 ledger[key] = {
                     "event": stored_event,
                     "sent_channels": delivered,
+                    "input_signatures": sorted(
+                        input_signatures
+                        or {
+                            signature
+                            for signature in events[index].get("_input_signatures", [])
+                            if isinstance(signature, str)
+                        }
+                    ),
                 }
 
 
@@ -709,9 +726,18 @@ async def _run_once_unlocked():
         logger.info("신호 발송 중...")
         signal_result = await process_signals(events_to_send)
         logger.info(f"발송 결과: {signal_result}")
-        _record_delivery_progress(cache, events_to_send, signal_result)
+        _record_delivery_progress(cache, events_to_send, signal_result, new_sigs)
         sent_events, delivery_completed = _successfully_processed_events(events_to_send, signal_result)
         _update_cache(cache, sent_events)
+        if delivery_completed:
+            completed_input_signatures = {
+                signature
+                for event in sent_events
+                for signature in event.get("_input_signatures", [])
+                if isinstance(signature, str)
+            }
+            if completed_input_signatures:
+                _record_seen_inputs(cache, completed_input_signatures)
         analysis_completed = analysis_completed and delivery_completed
     else:
         signal_result = {"sent": 0, "logged": 0}
