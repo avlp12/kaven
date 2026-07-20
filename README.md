@@ -7,7 +7,7 @@ severity(1–5) 이벤트를 생성하는 **지정학 조기경보 시스템**�
 텔레그램 경보, Palantir 스타일 웹 작전 콘솔(Ops Console), 그리고
 AI 에이전트 연동(MCP + REST)을 제공합니다.
 
-현재 버전: **0.0.14** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
+현재 버전: **0.0.15** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
 
 ---
 
@@ -143,8 +143,8 @@ pip install -r requirements-dev.txt      # 개발(+pytest/ruff/mypy)
 
 ### 3.2 `.env` 준비 (선택)
 
-Kaven은 `src/kaven/.env`를 자동 로드합니다. **모든 키는 선택**이며, 없으면
-시뮬레이션/비인증/규칙 기반 모드로 동작합니다.
+Kaven은 `src/kaven/.env`를 자동 로드합니다. **모든 키는 선택**입니다.
+AIS 자격증명이 없으면 unavailable로 표시되며, 규칙 기반 분석은 계속 동작합니다.
 
 ```bash
 cat > src/kaven/.env <<'ENV'
@@ -152,6 +152,7 @@ cat > src/kaven/.env <<'ENV'
 OPENSKY_CLIENT_ID=
 OPENSKY_CLIENT_SECRET=
 AISSTREAM_API_KEY=
+KAVEN_SIMULATION_MODE=false
 SEARXNG_URL=http://localhost:8080
 
 # ===== 분석 (하나만 있어도 됨; 없으면 구독 CLI → 규칙 기반) =====
@@ -174,6 +175,11 @@ TELEGRAM_USER_DM=
 # ===== 원격 백업 (opt-in — 미설정 시 외부 전송 완전 비활성) =====
 CONVEX_SITE_URL=
 CONVEX_EVENT_PATH=/addKavenRun
+
+# ===== 웹 관리 API (선택; 미설정 시 상태 변경은 loopback만 허용) =====
+KAVEN_ADMIN_TOKEN=
+KAVEN_ALLOWED_ORIGINS=http://127.0.0.1:8080,http://localhost:8080
+KAVEN_ALLOWED_CLI_COMMANDS=
 ENV
 ```
 
@@ -207,7 +213,8 @@ API 키 대신 **이미 쓰고 있는 구독**으로 분석 모델을 연결할 
 
 `KAVEN_CLI_PROVIDER`로 특정 브리지만 사용(`id`)하거나 전체 비활성(`off`)할 수
 있습니다. Grok 등 공식 API 구독 경로가 없는 서비스도 해당 CLI가 있다면
-커스텀 공급자로 등록해 쓸 수 있습니다 (Grok은 xAI API 키를
+커스텀 공급자로 등록해 쓸 수 있습니다. 웹 설정에서 추가 실행 파일을 허용하려면
+`KAVEN_ALLOWED_CLI_COMMANDS`에 이름을 추가합니다 (Grok은 xAI API 키를
 `OPENAI_BASE_URL=https://api.x.ai/v1`로 연결하는 방법도 있음).
 
 연결 상태는 콘솔 **Settings → 모델 공급자** 또는 `GET /health`의
@@ -374,6 +381,10 @@ cp src/kaven/config.example.json src/kaven/config.json   # 편집 후 재시작
 | `ANTHROPIC_BASE_URL` | Anthropic 호환 엔드포인트 (GLM/Kimi 등) | `api.anthropic.com` |
 | `ANTHROPIC_MODEL` | Anthropic 계열 분석 모델 | `claude-sonnet-5` |
 | `KAVEN_CLI_PROVIDER` | CLI 브리지 선택 — `auto`/`off`/특정 id | `auto` |
+| `KAVEN_ALLOWED_CLI_COMMANDS` | 웹 설정에서 허용할 추가 CLI 실행 파일(쉼표 구분) | 공식 CLI 5종 |
+| `KAVEN_ADMIN_TOKEN` | 원격 상태 변경 API의 Bearer/X-Kaven-Admin-Token | 미설정 시 loopback만 허용 |
+| `KAVEN_ALLOWED_ORIGINS` | 웹 API CORS origin allowlist(쉼표 구분) | 로컬 콘솔 2종 |
+| `KAVEN_SIMULATION_MODE` | AIS 시뮬레이션 명시 활성화 | `false` |
 | `TELEGRAM_*` | 경보 발송 | 미발송 |
 | `CONVEX_SITE_URL` | 원격 백업 opt-in | 비활성 |
 
@@ -387,14 +398,18 @@ FastAPI 문서: `GET /docs` (Swagger UI), `GET /openapi.json`
 | `GET /ops/summary?date=` | 콘솔용 통합 요약 (지역+이벤트+자산+감시구역) |
 | `GET /agent/manifest` · `/agent/context` · `/agent/events` | AI 에이전트 연동 (§5) |
 | `GET /runs` · `/runs/latest` · `/runs/files` · `/runs/dates` | 실행 로그 조회 (+필터) |
-| `POST /runs/once` | 수집 파이프라인 1회 실행 |
+| `POST /runs/once` | 수집 파이프라인 1회 실행 — 상태 변경 인증 적용 |
 | `GET /runs/stream` | SSE 실시간 run 스트림 |
 | `GET /report` · `/report/dates` · `/report/{YYYYMMDD}` | 일일 리포트 |
 | `GET /guide` · `/guide/{region}?days=` | 지역 가이드 + 히스토리 |
 | `GET /map/data` | 지도 마커 데이터 |
 | `GET /portfolio` · `/portfolio/{asset}` | 자산 영향 집계 |
 | `GET /config` | 수집 설정 조회 |
-| `PUT /config/{section}` | 설정 섹션 저장 — assets/regions/ais_zones/adsb_zones/news_feeds/news_keywords/social_keywords/cli_providers (Settings 뷰가 사용) |
+| `PUT /config/{section}` | 설정 섹션 저장 — assets/regions/ais_zones/adsb_zones/news_feeds/news_keywords/social_keywords/cli_providers; 상태 변경 인증 적용 |
+
+상태 변경 API는 `KAVEN_ADMIN_TOKEN` 미설정 시 loopback 요청만 허용합니다. 토큰을
+설정한 원격 운영에서는 `Authorization: Bearer <token>` 또는
+`X-Kaven-Admin-Token: <token>` 헤더를 사용합니다.
 
 ## 8) 프로젝트 구조
 
@@ -434,9 +449,8 @@ pytest -q          # 직접 실행
 ruff check .       # 린트
 ```
 
-> 참고: `test_kaven_log_replay_integration.py` 1건은 v0.0.05 저장소 위생
-> 작업(운영 로그 추적 해제)으로 샘플 로그가 없는 환경에서 실패합니다 — 기존
-> 알려진 이슈로 코드 결함이 아닙니다.
+리플레이 통합 테스트는 `tests/fixtures/kaven_replay.jsonl`의 결정적 fixture를
+사용하므로 운영 로그가 없는 깨끗한 checkout에서도 동일하게 실행됩니다.
 
 ## 10) 운영 / 트러블슈팅
 

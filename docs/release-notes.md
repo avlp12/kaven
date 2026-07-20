@@ -4,6 +4,38 @@
 
 ---
 
+## v0.0.15 — 2026-07-20
+
+### 핵심: 조기경보 정확성·재시도·웹 관리 경계 P0 강화
+
+1. **수집 정확성**
+   - AIS를 메시지 수가 아닌 고유 MMSI의 최신 PositionReport 기준으로 집계
+   - OpenSky 항공기 데이터를 AIS fallback으로 사용하던 경로 제거
+   - ADS-B 국가 민간 할당 대역의 군용 오분류 제거, 군용 hex/callsign 신호 분리
+   - AIS 시뮬레이션은 `KAVEN_SIMULATION_MODE=true`에서만 명시적으로 활성화
+2. **분석 무결성**
+   - LLM 출력의 event/severity/confidence/category/signal/region/assets 스키마 검증
+   - invalid 응답과 명시적 빈 배열을 구분해 다음 provider 또는 규칙 폴백 수행
+   - 수집 evidence URL allowlist 및 프롬프트 인젝션 데이터 경계 추가
+3. **재시도·전송 신뢰성**
+   - social-only 신규 게시물도 입력 트리거 생성
+   - 분석 실패 입력과 텔레그램 전송 실패 이벤트를 완료 캐시에 기록하지 않음
+   - 이벤트별 전송 채널 결과 추적, sent cache 원자적 저장
+4. **웹 관리 보안**
+   - 상태 변경 API에 관리자 토큰 또는 loopback 제한 적용
+   - CORS wildcard 제거, CLI 실행 파일 allowlist 도입
+   - Docker build context 비밀 제외 및 non-root 컨테이너 실행
+5. **품질 게이트**
+   - 결정적 replay fixture 포함, 개발 TestClient 의존성 명시
+   - 전체 소스 mypy 오류 정리 및 버전 단일화
+
+### 검증 결과
+- `pytest -q` → 104 passed
+- `ruff check .` → All checks passed
+- `mypy src webapp` → Success: no issues found in 30 source files
+
+---
+
 ## v0.0.14 — 2026-07-19
 
 ### 핵심: 구독(OAuth) 모델 연결 + zcode 스타일 설정 UI
