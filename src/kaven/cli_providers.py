@@ -51,6 +51,47 @@ def _split_command(cmd_str: str) -> list[str]:
     return shlex.split(cmd_str)
 
 
+def _windows_path_is_usable(path: str) -> bool:
+    """Return whether Windows grants the access needed to launch this path."""
+    if not os.path.isfile(path):
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        create_file = kernel32.CreateFileW
+        create_file.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.HANDLE,
+        ]
+        create_file.restype = wintypes.HANDLE
+
+        desired_access = 0x80000000  # GENERIC_READ
+        if not path.lower().endswith((".cmd", ".bat", ".ps1")):
+            desired_access |= 0x20000000  # GENERIC_EXECUTE
+        handle = create_file(
+            path,
+            desired_access,
+            0x00000007,  # FILE_SHARE_READ | WRITE | DELETE
+            None,
+            3,  # OPEN_EXISTING
+            0x00000080,  # FILE_ATTRIBUTE_NORMAL
+            None,
+        )
+        if handle == wintypes.HANDLE(-1).value:
+            return False
+        kernel32.CloseHandle(handle)
+        return True
+    except (AttributeError, OSError):
+        return False
+
+
 def _resolve_executable(name: str) -> str | None:
     """실행 파일 절대경로 해석.
 
@@ -66,17 +107,19 @@ def _resolve_executable(name: str) -> str | None:
         return shutil.which(name)
     lower = name.lower()
     if lower.endswith(_WIN_EXEC_EXTS) or lower.endswith(".ps1"):
-        return shutil.which(name)
+        found = shutil.which(name)
+        return found if found and _windows_path_is_usable(found) else None
     localappdata = os.environ.get("LOCALAPPDATA", "")
     if localappdata:
         alias = os.path.join(localappdata, "Microsoft", "WindowsApps", name + ".exe")
-        if os.path.isfile(alias):
+        if _windows_path_is_usable(alias):
             return alias
     for ext in _WIN_EXEC_EXTS:
         found = shutil.which(name + ext)
-        if found:
+        if found and _windows_path_is_usable(found):
             return found
-    return shutil.which(name)
+    found = shutil.which(name)
+    return found if found and _windows_path_is_usable(found) else None
 
 
 def _exec_argv(argv: list[str]) -> list[str]:

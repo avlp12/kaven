@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shlex
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -88,9 +90,16 @@ def _write_cli_config(monkeypatch, providers) -> None:
     monkeypatch.setenv("KAVEN_CONFIG", str(cfg))
 
 
+def _python_command(code: str | None = None) -> str:
+    argv = [sys.executable]
+    if code is not None:
+        argv.extend(["-c", code])
+    return subprocess.list2cmdline(argv) if sys.platform == "win32" else shlex.join(argv)
+
+
 def test_provider_status_reports_installed(monkeypatch):
     _write_cli_config(monkeypatch, [
-        {"id": "py", "name": "Python", "enabled": True, "command": "python3 -c"},
+        {"id": "py", "name": "Python", "enabled": True, "command": _python_command()},
         {"id": "ghost", "name": "Ghost", "enabled": False, "command": "no-such-cli-xyz -p"},
     ])
     status = {p["id"]: p for p in provider_status()}
@@ -101,9 +110,9 @@ def test_provider_status_reports_installed(monkeypatch):
 
 def test_available_providers_selector(monkeypatch):
     _write_cli_config(monkeypatch, [
-        {"id": "py", "name": "Python", "enabled": True, "command": "python3 -c"},
-        {"id": "sh", "name": "Shell", "enabled": True, "command": "sh -c"},
-        {"id": "off1", "name": "Disabled", "enabled": False, "command": "sh -c"},
+        {"id": "py", "name": "Python", "enabled": True, "command": _python_command()},
+        {"id": "sh", "name": "Shell", "enabled": True, "command": _python_command()},
+        {"id": "off1", "name": "Disabled", "enabled": False, "command": _python_command()},
         {"id": "ghost", "name": "Missing", "enabled": True, "command": "no-such-cli-xyz"},
     ])
     monkeypatch.delenv("KAVEN_CLI_PROVIDER", raising=False)
@@ -117,14 +126,16 @@ def test_available_providers_selector(monkeypatch):
 
 
 def test_run_cli_appends_prompt_and_captures_stdout():
-    provider = {"id": "echo", "command": "echo"}
+    provider = {"id": "echo", "command": _python_command("import sys; print(sys.argv[-1])")}
     out = asyncio.run(run_cli(provider, "hello world"))
     assert out == "hello world"
 
 
 def test_run_cli_failures_return_none():
     assert asyncio.run(run_cli({"id": "ghost", "command": "no-such-cli-xyz"}, "x")) is None
-    assert asyncio.run(run_cli({"id": "false", "command": "false"}, "x")) is None
+    assert asyncio.run(run_cli(
+        {"id": "false", "command": _python_command("raise SystemExit(1)")}, "x"
+    )) is None
     assert asyncio.run(run_cli({"id": "empty", "command": ""}, "x")) is None
 
 
@@ -156,6 +167,7 @@ def test_windows_executable_resolution(monkeypatch):
         "spacy.exe": "C:\\Program Files\\Spacy\\spacy.exe",  # 공백 경로
     }
     monkeypatch.setattr(cp.shutil, "which", lambda n: table.get(n))
+    monkeypatch.setattr(cp, "_windows_path_is_usable", lambda path: True)
     monkeypatch.delenv("LOCALAPPDATA", raising=False)
 
     assert cp._resolve_executable("codex") == "C:\\npm\\codex.cmd"
@@ -194,20 +206,50 @@ def test_windows_executable_resolution(monkeypatch):
     assert calls["cwd"] == tmpdir
 
 
-def test_launch_login_headless_extracts_url(monkeypatch):
-    """터미널 없는 환경 — 백그라운드 실행 + 초기 출력에서 로그인 URL 추출."""
-    import stat
+def test_windows_executable_resolution_skips_inaccessible_candidate(monkeypatch):
+    """A PATH hit is not installed when Windows denies execute access."""
+    import sys as _sys
 
     from src.kaven import cli_providers as cp
 
-    script = _tmp() / "fake-login"
-    script.write_text("#!/bin/sh\necho 'Open https://example.com/device?code=ABC to sign in'\n",
-                      encoding="utf-8")
-    script.chmod(script.stat().st_mode | stat.S_IEXEC)
+    blocked = (
+        "C:\\Program Files\\WindowsApps\\OpenAI.Codex_1.0.0.0_x64__test"
+        "\\app\\resources\\codex.exe"
+    )
+    table = {
+        "codex.exe": blocked,
+        "codex.cmd": "C:\\npm\\codex.cmd",
+    }
+    monkeypatch.setattr(_sys, "platform", "win32")
+    monkeypatch.setattr(cp.shutil, "which", lambda name: table.get(name))
+    monkeypatch.setattr(cp, "_windows_path_is_usable", lambda path: path != blocked)
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+
+    assert cp._resolve_executable("codex") == "C:\\npm\\codex.cmd"
+
+    table["codex.cmd"] = None
+    assert cp._resolve_executable("codex") is None
+    monkeypatch.setattr(
+        cp,
+        "_configured_providers",
+        lambda: [{"id": "codex", "name": "Codex", "command": "codex exec"}],
+    )
+    assert cp.provider_status() == [
+        {"id": "codex", "name": "Codex", "enabled": True, "installed": False}
+    ]
+
+
+def test_launch_login_headless_extracts_url(monkeypatch):
+    """터미널 없는 환경 — 백그라운드 실행 + 초기 출력에서 로그인 URL 추출."""
+    from src.kaven import cli_providers as cp
+
+    command = _python_command(
+        "print('Open https://example.com/device?code=ABC to sign in')"
+    )
     monkeypatch.setattr(cp, "_spawn_in_terminal", lambda _cmd: False)
 
-    result = cp.launch_login({"id": "fake", "command": str(script),
-                              "login_command": str(script)})
+    result = cp.launch_login({"id": "fake", "command": command,
+                              "login_command": command})
     assert result["mode"] == "headless"
     assert result["urls"] == ["https://example.com/device?code=ABC"]
 
@@ -233,7 +275,7 @@ def test_health_reports_analysis_status(monkeypatch):
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
     monkeypatch.setenv("GEMINI_API_KEY", "g-key")
     _write_cli_config(monkeypatch, [
-        {"id": "py", "name": "Python", "enabled": True, "command": "python3 -c"},
+        {"id": "py", "name": "Python", "enabled": True, "command": _python_command()},
     ])
     body = _client().get("/health").json()
     analysis = body["analysis"]
@@ -305,16 +347,12 @@ def test_put_credentials_endpoint(monkeypatch):
 
 
 def test_cli_login_endpoint(monkeypatch):
-    import stat
-
     from src.kaven import cli_providers as cp
 
-    script = _tmp() / "fake-cli"
-    script.write_text("#!/bin/sh\necho 'Visit https://login.example.com/start'\n", encoding="utf-8")
-    script.chmod(script.stat().st_mode | stat.S_IEXEC)
+    command = _python_command("print('Visit https://login.example.com/start')")
     _write_cli_config(monkeypatch, [
         {"id": "fake", "name": "Fake", "enabled": True,
-         "command": str(script), "login_command": str(script)},
+         "command": command, "login_command": command},
         {"id": "ghost", "name": "Ghost", "enabled": True, "command": "no-such-cli-xyz"},
     ])
     monkeypatch.setattr(cp, "_spawn_in_terminal", lambda _cmd: False)
