@@ -88,5 +88,10 @@
     "tag": "v0.0.18",
     "commit": "432f9fa2ba6a7d8c78b48390ba43543fcc5bdda0",
     "date": "2026-07-20"
+  },
+  {
+    "tag": "v0.0.19",
+    "commit": "de52d20d5565ccf6b5ca1a29c9133f457639fb06",
+    "date": "2026-07-20"
   }
 ]

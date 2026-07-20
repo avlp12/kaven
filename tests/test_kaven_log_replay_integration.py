@@ -22,10 +22,18 @@ sys.modules.setdefault("signal_generator", types.SimpleNamespace(process_signals
 from src.kaven import kaven
 
 
+def _sample_log_path() -> Path:
+    """리플레이 샘플 로그 — 로컬 실로그가 있으면 우선, 없으면 커밋된 픽스처."""
+    legacy = Path("src/kaven/logs/maven_20260403.jsonl")
+    if legacy.exists():
+        return legacy
+    return Path(__file__).parent / "fixtures" / "replay_sample_20260403.jsonl"
+
+
 def test_replay_sample_log_deduplicates_and_stays_stable() -> None:
     kaven.logger.setLevel(logging.WARNING)
 
-    log_path = Path("src/kaven/logs/maven_20260403.jsonl")
+    log_path = _sample_log_path()
     assert log_path.exists(), "샘플 리플레이 로그 파일이 필요합니다."
 
     cache = {"date": "2026-04-07", "sent": []}

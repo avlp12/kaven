@@ -4,6 +4,30 @@
 
 ---
 
+## v0.0.19 — 2026-07-20
+
+### 핵심: 테스트 스위트 완전 그린 — 리플레이 통합 테스트 픽스처화
+
+1. **만성 실패 1건 해소**: `test_replay_sample_log_deduplicates_and_stays_stable`
+   - 원인: 원저자 로컬에만 존재하던 실수집 로그
+     (`src/kaven/logs/maven_20260403.jsonl`)에 의존 — 저장소를 새로 클론한
+     모든 환경(CI 포함)에서 파일 부재로 항상 실패
+   - 해결: 실제 로그와 동일 스키마의 **합성 리플레이 픽스처**
+     (`tests/fixtures/replay_sample_20260403.jsonl`, 30 runs · 120 events)를
+     저장소에 커밋 — 고유 이벤트 8종을 반복 주입해 dedup의 신규/완전 중복/
+     severity 상승 갱신 경로를 모두 검증 (dedup 비율 < 0.20 조건 유지)
+   - 로컬에 기존 실로그가 있으면 그것을 우선 사용 (기존 동작 보존)
+2. 이제 `pytest` 기준 **83 passed / 0 failed** — 이후 릴리스부터
+   "기존 실패 1건" 단서가 사라짐
+
+### 운영 영향
+- 제품 코드 변경 없음 (테스트·픽스처 전용)
+
+### 검증 결과
+- `ruff check .` → All checks passed / `pytest` → **83 passed, 0 failed**
+
+---
+
 ## v0.0.18 — 2026-07-20
 
 ### 핵심: CLI 브리지 원클릭 OAuth 로그인
