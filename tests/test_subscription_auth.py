@@ -153,8 +153,10 @@ def test_windows_executable_resolution(monkeypatch):
         "codex.cmd": "C:\\npm\\codex.cmd",
         "codex": "C:\\npm\\codex",          # 확장자 없는 심 — 선택되면 안 됨
         "tool": "C:\\bin\\tool.ps1",        # .ps1만 있는 경우 → powershell 위임
+        "spacy.exe": "C:\\Program Files\\Spacy\\spacy.exe",  # 공백 경로
     }
     monkeypatch.setattr(cp.shutil, "which", lambda n: table.get(n))
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
 
     assert cp._resolve_executable("codex") == "C:\\npm\\codex.cmd"
     assert cp._exec_argv(["codex", "login"]) == ["cmd", "/c", "C:\\npm\\codex.cmd", "login"]
@@ -163,12 +165,33 @@ def test_windows_executable_resolution(monkeypatch):
     assert cp._split_command('"C:\\Program Files\\x\\cli.cmd" login') == \
         ["C:\\Program Files\\x\\cli.cmd", "login"]
 
-    # 터미널 스폰이 해석된 실행 파일로 명령을 구성하는지
-    calls = []
-    monkeypatch.setattr(cp.subprocess, "Popen", lambda argv, **_k: calls.append(argv))
-    assert cp._spawn_in_terminal("codex login") is True
-    assert calls[0][:6] == ["cmd", "/c", "start", "Kaven CLI Login", "cmd", "/k"]
-    assert calls[0][6] == 'cmd /c C:\\npm\\codex.cmd login'
+    # 배치 라인 — .cmd는 call, 공백 경로는 따옴표 (cmd는 \" 이스케이프 미지원)
+    assert cp._windows_batch_line(["codex", "login"]) == "call C:\\npm\\codex.cmd login"
+    assert cp._windows_batch_line(["spacy", "login"]) == \
+        '"C:\\Program Files\\Spacy\\spacy.exe" login'
+
+    # MS Store 앱 실행 별칭(%LOCALAPPDATA%\Microsoft\WindowsApps) 우선
+    alias_root = _tmp()
+    alias_dir = alias_root / "Microsoft" / "WindowsApps"
+    alias_dir.mkdir(parents=True)
+    (alias_dir / "codex.exe").write_bytes(b"")
+    monkeypatch.setenv("LOCALAPPDATA", str(alias_root))
+    assert cp._resolve_executable("codex") == str(alias_dir / "codex.exe")
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+
+    # 터미널 스폰 — 임시 배치 파일 생성 + 따옴표 불필요한 파일명으로 실행
+    import tempfile as _tf
+    tmpdir = str(_tmp())
+    monkeypatch.setattr(_tf, "gettempdir", lambda: tmpdir)
+    calls = {}
+    monkeypatch.setattr(cp.subprocess, "Popen",
+                        lambda argv, **kw: calls.update(argv=argv, **kw))
+    assert cp._spawn_in_terminal("spacy login") is True
+    bat = Path(tmpdir) / "kaven_cli_login.cmd"
+    assert '"C:\\Program Files\\Spacy\\spacy.exe" login' in bat.read_text(encoding="utf-8")
+    assert calls["argv"][:6] == ["cmd", "/c", "start", "Kaven CLI Login", "cmd", "/k"]
+    assert calls["argv"][6] == "kaven_cli_login.cmd"
+    assert calls["cwd"] == tmpdir
 
 
 def test_launch_login_headless_extracts_url(monkeypatch):

@@ -4,6 +4,32 @@
 
 ---
 
+## v0.0.21 — 2026-07-20
+
+### 핵심: Windows OAuth 로그인 2차 수정 — 공백 경로 따옴표 파싱 + MS Store 별칭
+
+1. **원인** (v0.0.20 이후 잔존 실패): 해석된 실행 파일 경로에 공백이 있으면
+   (`C:\Program Files\...`) `cmd /k`에 넘기는 문자열의 따옴표가 `\"`로
+   이스케이프되는데, **cmd는 백슬래시 이스케이프 따옴표를 해석하지 못해**
+   "실행할 수 있는 프로그램이 아닙니다"로 실패
+2. **수정** (`cli_providers`):
+   - 로그인 명령을 **임시 배치 파일**(`%TEMP%\kaven_cli_login.cmd`)에 쓰고
+     따옴표가 필요 없는 파일명으로 실행 — 파일 내부의 따옴표 경로는
+     cmd 배치 파서가 정상 처리 (.cmd/.bat은 `call`, .ps1은 powershell)
+   - **MS Store 앱 실행 별칭 우선**: `%LOCALAPPDATA%\Microsoft\WindowsApps`의
+     별칭 exe를 패키지 내부 exe(`C:\Program Files\WindowsApps\…`, ACL로
+     직접 실행 거부 가능)보다 먼저 해석 — MS Store로 설치한 Codex 대응
+3. **테스트**: win32 시뮬레이션 확장 (+공백 경로 배치 라인, 별칭 우선,
+   배치 파일 생성·cwd 실행 검증)
+
+### 운영 영향
+- Breaking change 없음 — macOS/Linux 동작 변화 없음
+
+### 검증 결과
+- `ruff check .` → All checks passed / `pytest` → **84 passed, 0 failed**
+
+---
+
 ## v0.0.20 — 2026-07-20
 
 ### 핵심: Windows CLI 실행 수정 — OAuth 로그인 '액세스가 거부되었습니다' 해소

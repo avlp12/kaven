@@ -54,20 +54,29 @@ def _split_command(cmd_str: str) -> list[str]:
 def _resolve_executable(name: str) -> str | None:
     """실행 파일 절대경로 해석.
 
-    Windows에서 npm 전역 설치는 확장자 없는 유닉스 셸 심(shim)과 .cmd 래퍼를
-    함께 만드는데, 확장자 없는 심이 잡히면 cmd에서 '액세스가 거부되었습니다'로
-    실패한다 — 실행 가능한 확장자(.com/.exe/.bat/.cmd)를 우선 탐색한다.
+    Windows 우선순위:
+    1. MS Store 앱 실행 별칭(%LOCALAPPDATA%\\Microsoft\\WindowsApps\\{name}.exe)
+       — C:\\Program Files\\WindowsApps 패키지 내부 exe는 ACL로 직접 실행이
+       거부될 수 있어 공식 실행 진입점인 별칭을 우선한다
+    2. 실행 가능한 확장자(.com/.exe/.bat/.cmd) — npm 전역 설치의 확장자 없는
+       유닉스 셸 심이 잡혀 '액세스가 거부되었습니다'가 나는 문제 회피
+    3. 그 외(.ps1 등) — 호출부에서 powershell로 위임
     """
     if sys.platform != "win32":
         return shutil.which(name)
     lower = name.lower()
     if lower.endswith(_WIN_EXEC_EXTS) or lower.endswith(".ps1"):
         return shutil.which(name)
+    localappdata = os.environ.get("LOCALAPPDATA", "")
+    if localappdata:
+        alias = os.path.join(localappdata, "Microsoft", "WindowsApps", name + ".exe")
+        if os.path.isfile(alias):
+            return alias
     for ext in _WIN_EXEC_EXTS:
         found = shutil.which(name + ext)
         if found:
             return found
-    return shutil.which(name)  # .ps1 등 — 호출부에서 powershell로 위임
+    return shutil.which(name)
 
 
 def _exec_argv(argv: list[str]) -> list[str]:
@@ -80,6 +89,26 @@ def _exec_argv(argv: list[str]) -> list[str]:
         if lower.endswith(".ps1"):
             return ["powershell", "-ExecutionPolicy", "Bypass", "-File", exe, *argv[1:]]
     return [exe, *argv[1:]]
+
+
+def _windows_batch_line(argv: list[str]) -> str:
+    """배치 파일 안에서 실행할 한 줄 생성 — 공백 경로는 따옴표로 감싼다.
+
+    cmd는 list2cmdline이 만드는 백슬래시 이스케이프 따옴표(\\")를 이해하지
+    못하므로, `cmd /k "<중첩 따옴표 문자열>"` 대신 배치 파일에 평범한
+    따옴표 명령을 써 두고 그 파일을 실행한다.
+    """
+    exe = _resolve_executable(argv[0]) or argv[0]
+    lower = exe.lower()
+    rest = subprocess.list2cmdline(argv[1:])
+    quoted = f'"{exe}"' if " " in exe else exe
+    if lower.endswith((".cmd", ".bat")):
+        line = f"call {quoted} {rest}"
+    elif lower.endswith(".ps1"):
+        line = f"powershell -ExecutionPolicy Bypass -File {quoted} {rest}"
+    else:
+        line = f"{quoted} {rest}"
+    return line.strip()
 
 
 def _configured_providers() -> list[dict[str, Any]]:
@@ -145,11 +174,21 @@ def _spawn_in_terminal(cmd_str: str) -> bool:
     """
     try:
         if sys.platform == "win32":
-            # 확장자 없는 npm 심 대신 실제 실행 파일(.cmd/.exe)로 해석해 실행
-            # ('액세스가 거부되었습니다' 방지). start의 첫 따옴표 인자는 창 제목,
-            # /k로 로그인 후에도 창 유지.
-            inner = subprocess.list2cmdline(_exec_argv(_split_command(cmd_str)))
-            subprocess.Popen(["cmd", "/c", "start", "Kaven CLI Login", "cmd", "/k", inner])
+            # 명령을 임시 배치 파일에 써 두고 실행 — cmd /k에 중첩 따옴표
+            # 문자열을 넘기면 공백 경로에서 파싱이 깨진다(\" 미지원).
+            # 배치 파일명은 공백이 없어 따옴표가 필요 없고, 파일 내부의
+            # 따옴표 경로는 cmd 배치 파서가 정상 처리한다.
+            import tempfile
+            bat_dir = tempfile.gettempdir()
+            bat = os.path.join(bat_dir, "kaven_cli_login.cmd")
+            line = _windows_batch_line(_split_command(cmd_str))
+            with open(bat, "w", encoding="utf-8", newline="\r\n") as f:
+                f.write(f"@echo off\n{line}\n")
+            # start의 첫 따옴표 인자는 창 제목 — /k로 로그인 후에도 창 유지
+            subprocess.Popen(
+                ["cmd", "/c", "start", "Kaven CLI Login", "cmd", "/k", "kaven_cli_login.cmd"],
+                cwd=bat_dir,
+            )
             return True
         if sys.platform == "darwin":
             import json as _json
