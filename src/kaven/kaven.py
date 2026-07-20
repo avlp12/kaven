@@ -250,8 +250,9 @@ def _load_sent_cache() -> dict:
     today = datetime.now().strftime("%Y-%m-%d")
     if cache_file.exists():
         try:
-            data = json.loads(cache_file.read_text())
-            if data.get("date") == today:
+            loaded = json.loads(cache_file.read_text())
+            if isinstance(loaded, dict) and loaded.get("date") == today:
+                data: dict = loaded
                 data.setdefault("seen_inputs", {})
                 return data
         except Exception:
@@ -575,7 +576,7 @@ async def run_once():
     analysis_completed = False
     if not new_sigs:
         logger.info("신규 입력 없음 — LLM 분석/발송 건너뜀 (동일 자극 반복 방지)")
-        events = []
+        events: list[dict] = []
         events_to_send = []
     else:
         logger.info(f"신규 자극 {len(new_sigs)}건 — 분석 엔진 실행 중...")

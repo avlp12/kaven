@@ -61,7 +61,8 @@ async def _get_opensky_bearer_token(session: aiohttp.ClientSession) -> str | Non
             if resp.status == 200:
                 token_data = await resp.json()
                 logger.info("OpenSky Bearer token 발급 완료")
-                return token_data.get("access_token")
+                access_token = token_data.get("access_token")
+                return str(access_token) if access_token else None
             else:
                 body = await resp.text()
                 logger.warning(f"OpenSky 토큰 발급 실패 {resp.status}: {body[:200]}")

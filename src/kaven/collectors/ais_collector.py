@@ -1,8 +1,8 @@
 """
 AIS Collector — 선박 AIS 데이터 수집
 
-1차: OpenSky REST API (공개, 인증 불필요) — 항공+선박 혼합
-2차: aisstream.io WebSocket (API 키 필요, 포트 차단 시 스킵)
+aisstream.io WebSocket을 통해 선박 PositionReport를 수집한다.
+OpenSky 항공기 데이터는 AIS 대체 데이터로 사용하지 않는다.
 
 호르무즈 해협·말라카 해협 집중 모니터링.
 이상 이동(선박 급감, 클러스터링) 감지 → JSON 반환.
@@ -97,37 +97,6 @@ async def _collect_live(api_key: str, timeout_seconds: int) -> list[dict[str, An
     }
 
     uri = "wss://stream.aisstream.io/v0/stream"
-
-    # WebSocket 연결 전 OpenSky REST로 빠르게 선박 수 확인 (fallback 겸용)
-    try:
-        import aiohttp
-        opensky_results = []
-        async with aiohttp.ClientSession() as session:
-            for zone_key, zone_def in watch_zones.items():
-                url = (f"https://opensky-network.org/api/states/all"
-                       f"?lamin={zone_def['lat_min']}&lomin={zone_def['lon_min']}"
-                       f"&lamax={zone_def['lat_max']}&lomax={zone_def['lon_max']}")
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as r:
-                    if r.status == 200:
-                        data = await r.json()
-                        states = data.get("states", []) or []
-                        opensky_results.append((zone_key, len(states), states))
-                        logger.info(f"OpenSky [{watch_zones[zone_key]['name']}]: {len(states)}기 감지")
-        if opensky_results:
-            zone_ships_opensky = {zone_key: [] for zone_key in watch_zones}
-            for zone_key, count, states in opensky_results:
-                for s in states:
-                    zone_ships_opensky[zone_key].append({
-                        "callsign": (s[1] or "").strip(),
-                        "country": s[2],
-                        "lat": s[6], "lon": s[5],
-                        "altitude": s[7],
-                        "speed": s[9],
-                        "source": "opensky"
-                    })
-            # WebSocket도 시도하되 실패하면 OpenSky 결과 사용
-    except Exception as e:
-        logger.warning(f"OpenSky REST 수집 실패: {e}")
 
     try:
         async with websockets.connect(uri, open_timeout=8) as ws:

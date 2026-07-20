@@ -10,12 +10,13 @@ import hashlib
 import logging
 import os
 from datetime import datetime, timezone, timedelta
-from typing import Any
+from typing import Any, cast
 
 import aiohttp
 import feedparser
 
 from src.kaven.config_loader import get_news_feeds, get_news_keywords
+from src.kaven.version import __version__
 
 logger = logging.getLogger("kaven.news")
 
@@ -42,17 +43,23 @@ async def collect() -> list[dict[str, Any]]:
         rss_task = _collect_rss(session)
         searx_task = _collect_searxng(session)
 
-        rss_results, searx_results = await asyncio.gather(
+        gathered = await asyncio.gather(
             rss_task, searx_task, return_exceptions=True
         )
+        rss_result = cast(list[dict[str, Any]] | BaseException, gathered[0])
+        searx_result = cast(list[dict[str, Any]] | BaseException, gathered[1])
 
-        if isinstance(rss_results, Exception):
-            logger.error(f"RSS 수집 실패: {rss_results}")
-            rss_results = []
+        if isinstance(rss_result, BaseException):
+            logger.error(f"RSS 수집 실패: {rss_result}")
+            rss_results: list[dict[str, Any]] = []
+        else:
+            rss_results = rss_result
 
-        if isinstance(searx_results, Exception):
-            logger.error(f"SearxNG 수집 실패: {searx_results}")
-            searx_results = []
+        if isinstance(searx_result, BaseException):
+            logger.error(f"SearxNG 수집 실패: {searx_result}")
+            searx_results: list[dict[str, Any]] = []
+        else:
+            searx_results = searx_result
 
         # 중복 제거 후 병합
         for item in rss_results + searx_results:
@@ -81,7 +88,7 @@ async def _collect_rss(session: aiohttp.ClientSession) -> list[dict[str, Any]]:
             async with session.get(
                 feed_url,
                 timeout=aiohttp.ClientTimeout(total=15),
-                headers={"User-Agent": "Kaven/0.0.04"}
+                headers={"User-Agent": f"Kaven/{__version__}"}
             ) as resp:
                 if resp.status != 200:
                     logger.warning(f"RSS {feed_name} HTTP {resp.status}")

@@ -75,8 +75,11 @@ def _bad(msg: str) -> HTTPException:
 
 
 def _num(item: dict, field: str, lo: float, hi: float) -> float:
+    raw_value = item.get(field)
     try:
-        v = float(item.get(field))
+        if not isinstance(raw_value, (str, int, float)):
+            raise TypeError
+        v = float(raw_value)
     except (TypeError, ValueError):
         raise _bad(f"{field} must be a number") from None
     if not (lo <= v <= hi):

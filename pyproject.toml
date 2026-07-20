@@ -1,6 +1,6 @@
 [project]
 name = "kaven"
-version = "0.0.04"
+version = "0.0.15"
 description = "Korean AI-based Vigilance for Event Navigation — 지정학 조기경보 + 투자 신호 시스템"
 requires-python = ">=3.11"
 dependencies = [
@@ -18,6 +18,7 @@ dev = [
     "pytest>=9.0",
     "ruff>=0.4",
     "mypy>=1.10",
+    "httpx2>=2.7",
 ]
 
 [tool.ruff]

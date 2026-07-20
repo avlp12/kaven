@@ -25,8 +25,8 @@ from src.kaven import kaven
 def test_replay_sample_log_deduplicates_and_stays_stable() -> None:
     kaven.logger.setLevel(logging.WARNING)
 
-    log_path = Path("src/kaven/logs/maven_20260403.jsonl")
-    assert log_path.exists(), "샘플 리플레이 로그 파일이 필요합니다."
+    log_path = Path(__file__).parent / "fixtures" / "kaven_replay.jsonl"
+    assert log_path.exists(), "추적 가능한 샘플 리플레이 fixture가 필요합니다."
 
     cache = {"date": "2026-04-07", "sent": []}
     raw_count = 0

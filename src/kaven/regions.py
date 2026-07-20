@@ -91,4 +91,4 @@ def region_name(code: str) -> str:
     """지역 코드의 한글명. 미등록 코드는 코드 그대로 반환."""
     if code == "other":
         return "기타"
-    return region_info(include_disabled=True).get(code, {}).get("name", code)
+    return str(region_info(include_disabled=True).get(code, {}).get("name", code))

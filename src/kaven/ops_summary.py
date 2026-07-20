@@ -132,7 +132,7 @@ def build_ops_summary(log_dir: Path, date_str: str | None = None) -> dict[str, A
 
     from src.kaven.aggregates import asset_meta  # 순환 import 방지 (지연)
     meta_map = asset_meta()
-    assets_out = [
+    assets_out: list[dict[str, Any]] = [
         {"name": name, "count": stat["count"], "max_severity": stat["max_severity"]}
         for name, stat in asset_stats.items()
         if meta_map.get(name, {}).get("enabled", True)

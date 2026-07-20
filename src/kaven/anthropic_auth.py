@@ -39,7 +39,9 @@ def _ant_cli_token() -> str | None:
         return None
     now = time.monotonic()
     cached = _ant_cache.get("token")
-    if cached and now - float(_ant_cache.get("at", 0.0)) < _ANT_TOKEN_TTL_SECONDS:
+    cached_at = _ant_cache.get("at", 0.0)
+    cached_at_value = float(cached_at) if isinstance(cached_at, (int, float, str)) else 0.0
+    if cached and now - cached_at_value < _ANT_TOKEN_TTL_SECONDS:
         return str(cached)
     try:
         proc = subprocess.run(

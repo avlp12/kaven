@@ -32,7 +32,10 @@ _MAX_OUTPUT_CHARS = 200_000
 def _configured_providers() -> list[dict[str, Any]]:
     from src.kaven.config_loader import load_config  # 지연 import (순환 방지)
 
-    return load_config().get("cli_providers", [])
+    configured = load_config().get("cli_providers", [])
+    if not isinstance(configured, list):
+        return []
+    return [provider for provider in configured if isinstance(provider, dict)]
 
 
 def provider_status() -> list[dict[str, Any]]:

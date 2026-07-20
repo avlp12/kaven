@@ -568,8 +568,8 @@ def _dedup_events(events: list[dict]) -> list[dict]:
     if not events:
         return events
 
-    seen = []
-    deduped = []
+    seen: list[str] = []
+    deduped: list[dict] = []
 
     for ev in events:
         event_text = ev.get("event", "").strip()

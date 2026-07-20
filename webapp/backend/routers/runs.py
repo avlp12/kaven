@@ -34,7 +34,10 @@ def latest_run() -> dict[str, Any]:
                 last_line = line
     if not last_line:
         raise HTTPException(status_code=404, detail="Log file is empty")
-    return json.loads(last_line)
+    parsed = json.loads(last_line)
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=500, detail="Latest run log is not a JSON object")
+    return parsed
 
 
 @router.get("")
@@ -76,7 +79,10 @@ def list_runs(
 async def trigger_run_once(_admin: None = Depends(require_admin)) -> dict[str, Any]:
     from src.kaven.kaven import run_once  # heavy import는 호출 시점에
 
-    return await run_once()
+    result = await run_once()
+    if not isinstance(result, dict):
+        raise HTTPException(status_code=500, detail="Run result is not a JSON object")
+    return result
 
 
 @router.get("/files")
