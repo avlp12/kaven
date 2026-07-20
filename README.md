@@ -7,7 +7,7 @@ severity(1–5) 이벤트를 생성하는 **지정학 조기경보 시스템**�
 텔레그램 경보, Palantir 스타일 웹 작전 콘솔(Ops Console), 그리고
 AI 에이전트 연동(MCP + REST)을 제공합니다.
 
-현재 버전: **0.0.14** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
+현재 버전: **0.0.15** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
 
 ---
 
@@ -183,6 +183,9 @@ ENV
 ### 3.3 구독(OAuth)으로 모델 연결 — API 키 없이
 
 API 키 대신 **이미 쓰고 있는 구독**으로 분석 모델을 연결할 수 있습니다.
+모든 키·토큰·엔드포인트는 환경변수 대신 **콘솔 Settings → 모델 공급자
+카드에서 직접 입력·저장**할 수도 있습니다 (`config.json`에 저장, 동일 항목의
+환경변수가 있으면 환경변수 우선, 연결 해제 버튼으로 삭제).
 
 **Anthropic 직접 연결** (우선순위: `ANTHROPIC_API_KEY` → OAuth):
 
@@ -244,7 +247,7 @@ python -m http.server 8080 --directory webapp/frontend
 | **Intel Report** | 일일 브리핑 마크다운 (날짜 선택) |
 | **Asset Impact** | 자산별 7일 severity 히트맵 + 신호 분포 |
 | **System** | 수집 파이프라인/감시구역/피드/키워드 상태 보드 |
-| **Settings** | zcode 스타일 좌측 내비(콘솔/모델/수집 그룹): 언어·콘솔 환경설정 + **모델 공급자 패널**(Direct API 상태 카드 + CLI 구독 브리지 편집) + 서버 설정 전 섹션 편집기(자산/감시지역/AIS·ADS-B 구역/뉴스 피드/키워드 → `config.json` 저장) |
+| **Settings** | zcode 스타일 좌측 내비(콘솔/모델/수집 그룹): 언어·콘솔 환경설정 + **모델 공급자 패널**(Direct API 키·토큰 카드 입력/연결 해제 + CLI 구독 브리지 편집) + 서버 설정 전 섹션 편집기(자산/감시지역/AIS·ADS-B 구역/뉴스 피드/키워드 → `config.json` 저장) |
 
 공통: 좌측 AO 워치리스트(S0 지역은 `+n QUIET` 접기, 자산 클릭 → Feed 필터),
 우측 인스펙터(이벤트 상세·지역 도시에·7일 스파크라인·JSON 복사),
@@ -395,6 +398,7 @@ FastAPI 문서: `GET /docs` (Swagger UI), `GET /openapi.json`
 | `GET /portfolio` · `/portfolio/{asset}` | 자산 영향 집계 |
 | `GET /config` | 수집 설정 조회 |
 | `PUT /config/{section}` | 설정 섹션 저장 — assets/regions/ais_zones/adsb_zones/news_feeds/news_keywords/social_keywords/cli_providers (Settings 뷰가 사용) |
+| `PUT /config/credentials` | 모델 키·토큰 저장/삭제 (Settings → 모델 공급자 카드. 빈 값 = 연결 해제. `GET /config` 응답에 미노출, 환경변수 우선) |
 
 ## 8) 프로젝트 구조
 

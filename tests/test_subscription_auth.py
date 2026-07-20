@@ -161,6 +161,65 @@ def test_health_reports_analysis_status(monkeypatch):
     assert analysis["cli_providers"][0]["installed"] is True
 
 
+def test_credentials_roundtrip_and_env_precedence(monkeypatch):
+    """Settings UI 자격증명: 저장/삭제, env 우선, resolve_auth 연동."""
+    from src.kaven.config_loader import get_credentials, update_credentials
+
+    cfg = _tmp() / "config.json"
+    cfg.write_text(json.dumps({"news_keywords": [{"id": "x", "query": "q"}]}), encoding="utf-8")
+    monkeypatch.setenv("KAVEN_CONFIG", str(cfg))
+    _clear_anthropic_env(monkeypatch)
+    monkeypatch.setattr(anthropic_auth.shutil, "which", lambda _cmd: None)
+
+    update_credentials({"anthropic_auth_token": "stored-token", "bogus_key": "x"})
+    assert get_credentials() == {"anthropic_auth_token": "stored-token"}  # 미허용 키 무시
+    saved = json.loads(cfg.read_text(encoding="utf-8"))
+    assert saved["news_keywords"]  # 다른 섹션 보존
+
+    mode, headers = resolve_auth()  # 저장된 토큰으로 OAuth
+    assert mode == "oauth" and headers["authorization"] == "Bearer stored-token"
+
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "env-token")  # env가 우선
+    assert resolve_auth()[1]["authorization"] == "Bearer env-token"
+
+    update_credentials({"anthropic_auth_token": ""})  # 빈 값 = 연결 해제
+    assert get_credentials() == {}
+    assert "credentials" not in json.loads(cfg.read_text(encoding="utf-8"))
+
+
+def test_put_credentials_endpoint(monkeypatch):
+    cfg = _tmp() / "config.json"
+    monkeypatch.setenv("KAVEN_CONFIG", str(cfg))
+    _clear_anthropic_env(monkeypatch)
+    monkeypatch.setattr(anthropic_auth.shutil, "which", lambda _cmd: None)
+    for var in ("OPENAI_BASE_URL", "GEMINI_API_KEY", "ANTHROPIC_BASE_URL"):
+        monkeypatch.delenv(var, raising=False)
+    client = _client()
+
+    res = client.put("/config/credentials", json={
+        "gemini_api_key": "g-secret", "openai_base_url": "https://api.x.ai/v1"})
+    assert res.status_code == 200
+    assert res.json() == {"saved": ["gemini_api_key", "openai_base_url"], "cleared": []}
+    assert "g-secret" not in res.text  # 응답에 비밀값 미포함
+
+    analysis = client.get("/health").json()["analysis"]
+    assert analysis["gemini"] is True and analysis["openai_compatible"] is True
+    assert analysis["stored"]["gemini_api_key"] is True
+    assert analysis["stored"]["anthropic_api_key"] is False
+
+    # GET /config 응답으로 자격증명이 새어나가지 않아야 함
+    assert "credentials" not in client.get("/config").json()
+    assert "g-secret" not in client.get("/config").text
+
+    assert client.put("/config/credentials", json={"nope": "x"}).status_code == 400
+    assert client.put("/config/credentials",
+                      json={"openai_base_url": "ftp://x"}).status_code == 400
+
+    res = client.put("/config/credentials", json={"gemini_api_key": ""})  # 해제
+    assert res.json()["cleared"] == ["gemini_api_key"]
+    assert client.get("/health").json()["analysis"]["gemini"] is False
+
+
 def test_put_cli_providers_validates_and_persists(monkeypatch):
     cfg = _tmp() / "config.json"
     monkeypatch.setenv("KAVEN_CONFIG", str(cfg))

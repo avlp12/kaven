@@ -217,6 +217,78 @@ def update_config_section(key: str, items: list[dict[str, Any]]) -> Path:
     return path
 
 
+# ── Model credentials (Settings UI) ─────────────────────────────
+#
+# 콘솔 Settings → 모델 공급자에서 저장하는 키·토큰. config.json의
+# "credentials" 키에 평문 저장되며(로컬 전용 권장), load_config() 반환에
+# 포함하지 않으므로 GET /config 응답으로는 노출되지 않는다.
+# 동일 항목의 환경변수가 있으면 항상 환경변수가 우선한다.
+
+CREDENTIAL_KEYS = (
+    "anthropic_api_key", "anthropic_auth_token", "anthropic_base_url", "anthropic_model",
+    "openai_base_url", "openai_api_key", "openai_model",
+    "gemini_api_key",
+)
+
+
+def get_credentials() -> dict[str, str]:
+    """저장된 자격증명 (빈 값 제외). 파일/파싱 오류 시 빈 dict."""
+    path = _resolve_config_path()
+    if not path.exists():
+        return {}
+    try:
+        overrides = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    raw = overrides.get("credentials", {})
+    if not isinstance(raw, dict):
+        return {}
+    return {k: str(raw[k]).strip() for k in CREDENTIAL_KEYS if str(raw.get(k) or "").strip()}
+
+
+def get_credential(key: str) -> str:
+    return get_credentials().get(key, "")
+
+
+def env_or_credential(env_var: str, cred_key: str) -> str:
+    """환경변수 우선, 없으면 Settings UI에서 저장한 자격증명."""
+    value = os.environ.get(env_var, "").strip()
+    return value or get_credential(cred_key)
+
+
+def update_credentials(patch: dict[str, str]) -> Path:
+    """자격증명 병합 저장 — 빈 값("")은 해당 키 삭제(연결 해제)."""
+    path = _resolve_config_path()
+    overrides: dict[str, Any] = {}
+    if path.exists():
+        try:
+            overrides = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            logger.warning(f"config 파일 파싱 실패 ({path}): {e} — credentials만 담아 재작성")
+            overrides = {}
+    creds = overrides.get("credentials", {})
+    if not isinstance(creds, dict):
+        creds = {}
+    for key, value in patch.items():
+        if key not in CREDENTIAL_KEYS:
+            continue
+        value = str(value or "").strip()
+        if value:
+            creds[key] = value
+        else:
+            creds.pop(key, None)
+    if creds:
+        overrides["credentials"] = creds
+    else:
+        overrides.pop("credentials", None)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(overrides, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    logger.info(f"Kaven credentials 저장: {len(creds)} keys -> {path}")
+    return path
+
+
 def enabled_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """enabled 플래그가 True인 항목만 필터링. 미지정이면 True 간주."""
     return [x for x in items if x.get("enabled", True)]
