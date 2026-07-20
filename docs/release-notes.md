@@ -4,6 +4,34 @@
 
 ---
 
+## v0.0.22 — 2026-07-20
+
+### 핵심: 실행 불가능한 Windows CLI 설치 오탐 방지
+
+1. **원인**: `shutil.which()`가 경로를 반환하면 실제 실행 권한을 확인하지 않고
+   설치된 CLI로 판정해, ACL로 직접 실행이 차단된
+   `C:\Program Files\WindowsApps\...\codex.exe`도 설치됨으로 표시
+2. **수정** (`cli_providers`):
+   - Windows `CreateFileW`로 실행 파일 후보의 읽기·실행 권한을 확인
+   - 접근이 거부된 `.exe` 후보는 건너뛰고 `.cmd`·`.bat` 등 다음 래퍼 후보를 계속 탐색
+   - 사용 가능한 후보가 없으면 Settings와 `/health`에서 `installed: false` 반환
+   - 로그인·헤드리스 실행·분석용 `run_cli`가 같은 판정을 공유
+3. **회귀 테스트**: 접근 거부된 WindowsApps 후보 뒤의 정상 `.cmd` 선택과
+   대체 후보가 없을 때 미설치 판정을 검증. CLI 실행 테스트를 Windows에서도
+   실제 Python 실행 파일을 사용하도록 정규화
+
+### 운영 영향
+- Breaking change 없음
+- 경로만 존재하고 실행 권한이 없는 CLI는 더 이상 설치됨으로 표시되지 않음
+- 정상 `.exe`·`.com`·`.cmd`·`.bat`·`.ps1` 탐색 순서는 유지
+
+### 검증 결과
+- `ruff check .` — All checks passed
+- `pytest -q` — **85 passed, 0 failed**
+- 실제 WindowsApps 내부 `codex.exe` — `resolved=None`, `installed=false` 확인
+
+---
+
 ## v0.0.21 — 2026-07-20
 
 ### 핵심: Windows OAuth 로그인 2차 수정 — 공백 경로 따옴표 파싱 + MS Store 별칭
