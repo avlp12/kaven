@@ -7,7 +7,7 @@ severity(1–5) 이벤트를 생성하는 **지정학 조기경보 시스템**�
 텔레그램 경보, Palantir 스타일 웹 작전 콘솔(Ops Console), 그리고
 AI 에이전트 연동(MCP + REST)을 제공합니다.
 
-현재 버전: **0.0.15** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
+현재 버전: **0.0.16** · 변경 이력: [`docs/release-notes.md`](docs/release-notes.md) · 라이선스: MIT
 
 ---
 
@@ -249,7 +249,7 @@ python -m http.server 8080 --directory webapp/frontend
 | **System** | 수집 파이프라인/감시구역/피드/키워드 상태 보드 |
 | **Settings** | zcode 스타일 좌측 내비(콘솔/모델/수집 그룹): 언어·콘솔 환경설정 + **모델 공급자 패널**(Direct API 키·토큰 카드 입력/연결 해제 + CLI 구독 브리지 편집) + 서버 설정 전 섹션 편집기(자산/감시지역/AIS·ADS-B 구역/뉴스 피드/키워드 → `config.json` 저장) |
 
-공통: 좌측 AO 워치리스트(S0 지역은 `+n QUIET` 접기, 자산 클릭 → Feed 필터),
+공통: 좌측 AO 워치리스트(S0 지역은 `+n QUIET` 접기, `＋` 버튼으로 AO 추가·편집, 자산 클릭 → Feed 필터),
 우측 인스펙터(이벤트 상세·지역 도시에·7일 스파크라인·JSON 복사),
 상단 THREATCON·SYNC 신선도·UTC/KST 시계·LIVE(SSE) 토글.
 
@@ -351,9 +351,12 @@ cp src/kaven/config.example.json src/kaven/config.json   # 편집 후 재시작
 | `news_feeds` / `news_keywords` / `social_keywords` | 수집기 소스/검색어 |
 | `cli_providers` | AI CLI 구독 브리지 — 이름/명령(프롬프트는 마지막 인자로 전달). Settings → 모델 공급자에서 편집 |
 
-> 참고: `regions`에 새 지역을 추가하면 지도/콘솔에는 즉시 반영되지만,
-> 분석기(LLM)가 그 코드를 이벤트에 부여하려면 분석 프롬프트의 지역 어휘에도
-> 등장해야 합니다 (`/agent/manifest`의 vocabulary가 동적으로 갱신됨).
+> 참고: `regions`에 새 지역(AO)을 추가하면 지도·워치리스트·에이전트 어휘
+> (`/agent/manifest`)는 물론 **분석기(LLM) 프롬프트의 지역 코드 어휘에도
+> 즉시 반영**되어, 다음 수집 run부터 해당 코드로 이벤트가 분류될 수 있습니다.
+> 콘솔 워치리스트의 AREAS OF OPERATION 헤더 `＋` 버튼으로 편집 화면에 바로
+> 이동할 수 있습니다. 새 AO는 이벤트가 생기기 전까지 S0이므로
+> `+n QUIET` 접힘 안에 표시됩니다.
 
 ```json
 {

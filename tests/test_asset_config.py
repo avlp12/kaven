@@ -146,6 +146,31 @@ def test_custom_region_reflected_in_ops(monkeypatch):
     assert ev["region_name"] == "한반도"
 
 
+def test_analyzer_prompt_region_vocab_follows_config(monkeypatch):
+    """사용자가 추가한 AO(감시 지역)가 LLM 분석 프롬프트 지역 어휘에 반영된다."""
+    from src.kaven.analyzer import build_user_prompt
+
+    cfg_path = _tmp() / "config.json"
+    cfg_path.write_text(json.dumps({"regions": [
+        {"code": "baltic", "name": "발트해", "name_en": "Baltic Sea",
+         "lat": 58.0, "lng": 20.0, "enabled": True},
+        {"code": "hormuz", "name": "호르무즈 해협", "name_en": "Strait of Hormuz",
+         "lat": 26.5, "lng": 56.25, "enabled": False},
+    ]}, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setenv("KAVEN_CONFIG", str(cfg_path))
+
+    prompt = build_user_prompt("수집 요약")
+    assert "baltic|other" in prompt          # 커스텀 AO + other
+    assert "발트해=baltic" in prompt          # 이름=코드 매핑 안내
+    assert "hormuz" not in prompt            # 비활성 지역 제외
+    assert "수집 요약" in prompt
+
+    # 설정이 없으면 내장 9개 지역 어휘 유지
+    monkeypatch.setenv("KAVEN_CONFIG", str(_tmp() / "none.json"))
+    default_prompt = build_user_prompt("x")
+    assert "hormuz" in default_prompt and "korea" in default_prompt
+
+
 def test_section_validators():
     """범용 PUT /config/{section} 검증 로직."""
     import pytest

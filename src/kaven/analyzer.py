@@ -54,7 +54,7 @@ ANALYSIS_USER_PROMPT = """다음 수집 데이터를 분석하고, 각 의미 �
     "source_url": "이 이벤트의 메인 레퍼런스 URL 1개 (수집 데이터에서 가장 신뢰할 수 있는 원문 링크. 없으면 null)",
     "source_title": "출처 매체명 또는 제목 (예: Reuters, AP, BBC 등. 없으면 null)",
     "event_time": "이벤트 실제 발생·보도 시각 (수집 데이터의 published 필드 기준, ISO8601. 없으면 null)",
-    "region": "hormuz|taiwan|korea|ukraine|india_pak|southcn|redsa|sahel|global|other (이벤트 발생 지역 코드. 이란/호르무즈=hormuz, 대만=taiwan, 한반도=korea, 우크라이나/러시아=ukraine, 인도/파키스탄=india_pak, 남중국해=southcn, 홍해/예멘=redsa, 사헬=sahel, 전지구=global)"
+    "region": "{region_vocab}"
 }}
 
 중요:
@@ -70,6 +70,25 @@ severity 기준:
 5: 긴급, 직접적 시장 충격 예상
 
 JSON 배열만 출력하세요. 추가 설명 없이 순수 JSON만."""
+
+
+def _region_vocab() -> str:
+    """분석 프롬프트용 지역 코드 어휘 — 설정된 감시 지역(AO) 기반 동적 생성.
+
+    사용자가 Settings에서 AO를 추가/해제하면 LLM이 부여할 수 있는
+    region 코드도 함께 갱신된다.
+    """
+    from src.kaven.regions import region_info  # 지연 import (모듈 순환 방지)
+
+    infos = region_info()
+    codes = [*infos, "other"]
+    names = ", ".join(f"{info.get('name', code)}={code}" for code, info in infos.items())
+    return f"{'|'.join(codes)} (이벤트 발생 지역 코드. {names}, 기타=other)"
+
+
+def build_user_prompt(summary: str) -> str:
+    """수집 요약 + 동적 지역 어휘를 채운 분석 사용자 프롬프트."""
+    return ANALYSIS_USER_PROMPT.format(collected_data=summary, region_vocab=_region_vocab())
 
 
 async def analyze(collected_data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -236,7 +255,7 @@ async def _call_openai_compatible(
             {"role": "system", "content": ANALYSIS_SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": ANALYSIS_USER_PROMPT.format(collected_data=summary),
+                "content": build_user_prompt(summary),
             },
         ],
     }
@@ -282,7 +301,7 @@ async def _call_gemini(api_key: str, summary: str) -> list[dict] | None:
             {
                 "role": "user",
                 "parts": [
-                    {"text": f"{ANALYSIS_SYSTEM_PROMPT}\n\n{ANALYSIS_USER_PROMPT.format(collected_data=summary)}"}
+                    {"text": f"{ANALYSIS_SYSTEM_PROMPT}\n\n{build_user_prompt(summary)}"}
                 ],
             }
         ],
@@ -325,7 +344,7 @@ async def _call_openclaw_gateway(gateway_url: str, summary: str) -> list[dict] |
         "messages": [
             {
                 "role": "user",
-                "content": ANALYSIS_USER_PROMPT.format(collected_data=summary),
+                "content": build_user_prompt(summary),
             }
         ],
     }
@@ -377,7 +396,7 @@ async def _call_anthropic_direct(auth_headers: dict[str, str], summary: str) -> 
         "messages": [
             {
                 "role": "user",
-                "content": ANALYSIS_USER_PROMPT.format(collected_data=summary),
+                "content": build_user_prompt(summary),
             }
         ],
     }
@@ -420,7 +439,7 @@ async def _call_cli_providers(summary: str) -> list[dict] | None:
         return None
     prompt = (
         f"{ANALYSIS_SYSTEM_PROMPT}\n\n"
-        f"{ANALYSIS_USER_PROMPT.format(collected_data=summary)}"
+        f"{build_user_prompt(summary)}"
     )
     for provider in providers:
         pid = provider.get("id", "?")
